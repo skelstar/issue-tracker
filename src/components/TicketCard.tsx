@@ -1,0 +1,32 @@
+import { useDraggable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import type { Ticket, Label } from '../types';
+
+interface Props {
+  ticket: Ticket;
+  label: Label | undefined;
+  isDragOverlay?: boolean;
+}
+
+export default function TicketCard({ ticket, label, isDragOverlay = false }: Props) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: ticket.id,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform) }}
+      className={`ticket-card${isDragging ? ' dragging' : ''}${isDragOverlay ? ' overlay' : ''}`}
+      {...listeners}
+      {...attributes}
+    >
+      <span className="ticket-title">{ticket.title}</span>
+      {label && (
+        <span className="ticket-badge" style={{ backgroundColor: label.color }}>
+          {label.name}
+        </span>
+      )}
+    </div>
+  );
+}
