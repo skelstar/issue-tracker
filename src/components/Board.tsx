@@ -14,11 +14,14 @@ import * as api from '../api/client';
 import Swimlane from './Swimlane';
 import TicketCard from './TicketCard';
 import AddTicketDialog from './AddTicketDialog';
+import DeleteConfirmDialog from './DeleteConfirmDialog';
 
 export default function Board() {
   const [labels, setLabels] = useState<Label[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [ticketToDelete, setTicketToDelete] = useState<Ticket | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -34,7 +37,16 @@ export default function Board() {
     });
   }, []);
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setSelectedTicketId(null);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   function handleDragStart(event: DragStartEvent) {
+    setSelectedTicketId(null);
     const ticket = tickets.find(t => t.id === event.active.id);
     setActiveTicket(ticket ?? null);
   }
@@ -61,11 +73,7 @@ export default function Board() {
     await api.updateTicket(ticket.id, updates);
   }
 
-  async function handleAddTicket(
-    title: string,
-    labelId: string,
-    newLabelName?: string
-  ) {
+  async function handleAddTicket(title: string, labelId: string, newLabelName?: string) {
     let finalLabelId = labelId;
 
     if (labelId === '__new__' && newLabelName) {
@@ -80,13 +88,21 @@ export default function Board() {
     setShowDialog(false);
   }
 
+  async function handleDeleteConfirm() {
+    if (!ticketToDelete) return;
+    await api.deleteTicket(ticketToDelete.id);
+    setTickets(prev => prev.filter(t => t.id !== ticketToDelete.id));
+    setSelectedTicketId(null);
+    setTicketToDelete(null);
+  }
+
   if (loading) {
     return <div className="loading">Loading…</div>;
   }
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="board">
+      <div className="board" onClick={() => setSelectedTicketId(null)}>
         <div className="board-header">
           {STATUSES.map(s => (
             <div key={s.id} className="col-status">
@@ -111,12 +127,15 @@ export default function Board() {
                 label={label}
                 tickets={tickets.filter(t => t.labelId === label.id)}
                 allLabels={labels}
+                selectedTicketId={selectedTicketId}
+                onSelectTicket={setSelectedTicketId}
+                onDeleteRequest={setTicketToDelete}
               />
             ))
           )}
           <div className="board-add-row">
             <div className="col-add">
-              <button className="add-ticket-btn" onClick={() => setShowDialog(true)}>
+              <button className="add-ticket-btn" onClick={e => { e.stopPropagation(); setShowDialog(true); }}>
                 + Add Ticket
               </button>
             </div>
@@ -139,6 +158,14 @@ export default function Board() {
           labels={labels}
           onClose={() => setShowDialog(false)}
           onSubmit={handleAddTicket}
+        />
+      )}
+
+      {ticketToDelete && (
+        <DeleteConfirmDialog
+          ticket={ticketToDelete}
+          onCancel={() => setTicketToDelete(null)}
+          onConfirm={handleDeleteConfirm}
         />
       )}
     </DndContext>

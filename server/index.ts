@@ -59,6 +59,14 @@ app.put('/api/tickets/:id', (req, res) => {
   res.json(tickets[idx]);
 });
 
+app.delete('/api/tickets/:id', (req, res) => {
+  const tickets = read<Record<string, unknown>>(TICKETS_FILE);
+  const filtered = tickets.filter(t => t.id !== req.params.id);
+  if (filtered.length === tickets.length) { res.status(404).json({ error: 'Not found' }); return; }
+  write(TICKETS_FILE, filtered);
+  res.json({ ok: true });
+});
+
 app.listen(PORT, () => {
   console.log(`API server running on http://localhost:${PORT}`);
 });

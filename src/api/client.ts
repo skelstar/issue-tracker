@@ -46,3 +46,7 @@ export async function updateTicket(
   });
   return r.json();
 }
+
+export async function deleteTicket(id: string): Promise<void> {
+  await fetch(`${BASE}/tickets/${id}`, { method: 'DELETE' });
+}
