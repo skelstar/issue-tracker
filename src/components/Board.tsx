@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -8,7 +8,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import type { Ticket, Label, Status } from '../types';
+import type { Ticket, Label, Project, Status } from '../types';
 import { STATUSES, LABEL_COLORS } from '../types';
 import * as api from '../api/client';
 import Swimlane from './Swimlane';
@@ -17,6 +17,8 @@ import AddTicketDialog from './AddTicketDialog';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 
 export default function Board() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
@@ -24,13 +26,18 @@ export default function Board() {
   const [ticketToDelete, setTicketToDelete] = useState<Ticket | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [addingProject, setAddingProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const newProjectInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
   useEffect(() => {
-    Promise.all([api.fetchLabels(), api.fetchTickets()]).then(([l, t]) => {
+    Promise.all([api.fetchProjects(), api.fetchLabels(), api.fetchTickets()]).then(([p, l, t]) => {
+      setProjects(p);
+      setActiveProjectId(p[0]?.id ?? null);
       setLabels(l);
       setTickets(t);
       setLoading(false);
@@ -38,8 +45,16 @@ export default function Board() {
   }, []);
 
   useEffect(() => {
+    if (addingProject) newProjectInputRef.current?.focus();
+  }, [addingProject]);
+
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setSelectedTicketId(null);
+      if (e.key === 'Escape') {
+        setSelectedTicketId(null);
+        setAddingProject(false);
+        setNewProjectName('');
+      }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -74,6 +89,7 @@ export default function Board() {
   }
 
   async function handleAddTicket(title: string, labelId: string, newLabelName?: string) {
+    if (!activeProjectId) return;
     let finalLabelId = labelId;
 
     if (labelId === '__new__' && newLabelName) {
@@ -83,7 +99,7 @@ export default function Board() {
       finalLabelId = newLabel.id;
     }
 
-    const ticket = await api.createTicket(title, finalLabelId);
+    const ticket = await api.createTicket(title, finalLabelId, activeProjectId);
     setTickets(prev => [...prev, ticket]);
     setShowDialog(false);
   }
@@ -96,6 +112,18 @@ export default function Board() {
     setTicketToDelete(null);
   }
 
+  async function handleCreateProject() {
+    const name = newProjectName.trim();
+    if (!name) { setAddingProject(false); return; }
+    const project = await api.createProject(name);
+    setProjects(prev => [...prev, project]);
+    setActiveProjectId(project.id);
+    setNewProjectName('');
+    setAddingProject(false);
+  }
+
+  const projectTickets = tickets.filter(t => t.projectId === activeProjectId);
+
   if (loading) {
     return <div className="loading">Loading…</div>;
   }
@@ -103,44 +131,89 @@ export default function Board() {
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="board" onClick={() => setSelectedTicketId(null)}>
-        <div className="board-header">
-          {STATUSES.map(s => (
-            <div key={s.id} className="col-status">
-              {s.label}
-              <span className="col-count">
-                {tickets.filter(t => t.status === s.id).length}
-              </span>
-            </div>
+
+        <div className="project-tabs" onClick={e => e.stopPropagation()}>
+          {projects.map(p => (
+            <button
+              key={p.id}
+              className={`project-tab${p.id === activeProjectId ? ' active' : ''}`}
+              onClick={() => { setActiveProjectId(p.id); setSelectedTicketId(null); }}
+            >
+              {p.name}
+            </button>
           ))}
+
+          {addingProject ? (
+            <form
+              className="project-tab-new-form"
+              onSubmit={e => { e.preventDefault(); handleCreateProject(); }}
+            >
+              <input
+                ref={newProjectInputRef}
+                className="project-tab-input"
+                value={newProjectName}
+                onChange={e => setNewProjectName(e.target.value)}
+                placeholder="Project name"
+              />
+              <button type="submit" className="project-tab-confirm">✓</button>
+              <button type="button" className="project-tab-cancel" onClick={() => { setAddingProject(false); setNewProjectName(''); }}>✕</button>
+            </form>
+          ) : (
+            <button className="project-tab-add" onClick={() => setAddingProject(true)}>
+              + New Project
+            </button>
+          )}
         </div>
 
-        <div className="board-body">
-          {labels.length === 0 ? (
-            <div className="empty-board">
-              <p>No tickets yet.</p>
-              <p>Click <strong>+ Add Ticket</strong> to create your first one.</p>
-            </div>
-          ) : (
-            labels.map(label => (
-              <Swimlane
-                key={label.id}
-                label={label}
-                tickets={tickets.filter(t => t.labelId === label.id)}
-                allLabels={labels}
-                selectedTicketId={selectedTicketId}
-                onSelectTicket={setSelectedTicketId}
-                onDeleteRequest={setTicketToDelete}
-              />
-            ))
-          )}
-          <div className="board-add-row">
-            <div className="col-add">
-              <button className="add-ticket-btn" onClick={e => { e.stopPropagation(); setShowDialog(true); }}>
-                + Add Ticket
-              </button>
-            </div>
+        {activeProjectId === null ? (
+          <div className="empty-board">
+            <p>No projects yet.</p>
+            <p>Click <strong>+ New Project</strong> to get started.</p>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="board-header">
+              {STATUSES.map(s => (
+                <div key={s.id} className="col-status">
+                  {s.label}
+                  <span className="col-count">
+                    {projectTickets.filter(t => t.status === s.id).length}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="board-body">
+              {labels.filter(l => projectTickets.some(t => t.labelId === l.id)).length === 0 ? (
+                <div className="empty-board">
+                  <p>No tickets yet.</p>
+                  <p>Click <strong>+ Add Ticket</strong> to create your first one.</p>
+                </div>
+              ) : (
+                labels
+                  .filter(l => projectTickets.some(t => t.labelId === l.id))
+                  .map(label => (
+                    <Swimlane
+                      key={label.id}
+                      label={label}
+                      tickets={projectTickets.filter(t => t.labelId === label.id)}
+                      allLabels={labels}
+                      selectedTicketId={selectedTicketId}
+                      onSelectTicket={setSelectedTicketId}
+                      onDeleteRequest={setTicketToDelete}
+                    />
+                  ))
+              )}
+              <div className="board-add-row">
+                <div className="col-add">
+                  <button className="add-ticket-btn" onClick={e => { e.stopPropagation(); setShowDialog(true); }}>
+                    + Add Ticket
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <DragOverlay>

@@ -18,11 +18,17 @@ export interface Label {
   color: string;
 }
 
+export interface Project {
+  id: string;
+  name: string;
+}
+
 export interface Ticket {
   id: string;
   title: string;
   labelId: string;
   status: Status;
+  projectId: string;
   createdAt: string;
 }
 

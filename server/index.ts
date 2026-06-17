@@ -10,6 +10,7 @@ const PORT = 3001;
 const DATA_DIR = path.join(__dirname, 'data');
 const TICKETS_FILE = path.join(DATA_DIR, 'tickets.json');
 const LABELS_FILE = path.join(DATA_DIR, 'labels.json');
+const PROJECTS_FILE = path.join(DATA_DIR, 'projects.json');
 
 app.use(cors());
 app.use(express.json());
@@ -17,6 +18,7 @@ app.use(express.json());
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(TICKETS_FILE)) fs.writeFileSync(TICKETS_FILE, '[]');
 if (!fs.existsSync(LABELS_FILE)) fs.writeFileSync(LABELS_FILE, '[]');
+if (!fs.existsSync(PROJECTS_FILE)) fs.writeFileSync(PROJECTS_FILE, '[]');
 
 function read<T>(file: string): T[] {
   return JSON.parse(fs.readFileSync(file, 'utf-8'));
@@ -25,6 +27,18 @@ function read<T>(file: string): T[] {
 function write<T>(file: string, data: T[]): void {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
+
+app.get('/api/projects', (_req, res) => {
+  res.json(read(PROJECTS_FILE));
+});
+
+app.post('/api/projects', (req, res) => {
+  const projects = read<Record<string, unknown>>(PROJECTS_FILE);
+  const project = { id: uuidv4(), ...req.body };
+  projects.push(project);
+  write(PROJECTS_FILE, projects);
+  res.json(project);
+});
 
 app.get('/api/labels', (_req, res) => {
   res.json(read(LABELS_FILE));
