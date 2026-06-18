@@ -89,7 +89,7 @@ export default function Board() {
     await api.updateTicket(ticket.id, updates);
   }
 
-  async function handleAddTicket(title: string, labelId: string, newLabelName?: string) {
+  async function handleAddTicket(title: string, labelId: string, newLabelName?: string, description?: string) {
     if (!activeProjectId) return;
     let finalLabelId = labelId;
 
@@ -100,12 +100,12 @@ export default function Board() {
       finalLabelId = newLabel.id;
     }
 
-    const ticket = await api.createTicket(title, finalLabelId, activeProjectId);
+    const ticket = await api.createTicket(title, finalLabelId, activeProjectId, description);
     setTickets(prev => [...prev, ticket]);
     setShowDialog(false);
   }
 
-  async function handleEditSave(id: string, updates: { title: string; labelId: string; status: Status }) {
+  async function handleEditSave(id: string, updates: { title: string; description?: string; labelId: string; status: Status }) {
     setTickets(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     setEditingTicket(null);
     await api.updateTicket(id, updates);

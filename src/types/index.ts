@@ -26,6 +26,7 @@ export interface Project {
 export interface Ticket {
   id: string;
   title: string;
+  description?: string;
   labelId: string;
   status: Status;
   projectId: string;

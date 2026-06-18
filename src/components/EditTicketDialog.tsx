@@ -6,12 +6,13 @@ interface Props {
   ticket: Ticket;
   labels: Label[];
   onClose: () => void;
-  onSave: (id: string, updates: { title: string; labelId: string; status: Status }) => Promise<void>;
+  onSave: (id: string, updates: { title: string; description?: string; labelId: string; status: Status }) => Promise<void>;
   onDelete: (ticket: Ticket) => void;
 }
 
 export default function EditTicketDialog({ ticket, labels, onClose, onSave, onDelete }: Props) {
   const [title, setTitle] = useState(ticket.title);
+  const [description, setDescription] = useState(ticket.description ?? '');
   const [labelId, setLabelId] = useState(ticket.labelId);
   const [status, setStatus] = useState<Status>(ticket.status);
   const [saving, setSaving] = useState(false);
@@ -35,7 +36,7 @@ export default function EditTicketDialog({ ticket, labels, onClose, onSave, onDe
     if (!title.trim()) return;
     setSaving(true);
     try {
-      await onSave(ticket.id, { title: title.trim(), labelId, status });
+      await onSave(ticket.id, { title: title.trim(), description: description.trim() || undefined, labelId, status });
     } catch (err) {
       console.error('Failed to save ticket:', err);
       setSaving(false);
@@ -58,6 +59,16 @@ export default function EditTicketDialog({ ticket, labels, onClose, onSave, onDe
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="edit-description">Description <span className="form-label-optional">(optional)</span></label>
+            <textarea
+              id="edit-description"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="Add more detail…"
+              rows={4}
             />
           </div>
           <div className="form-field">

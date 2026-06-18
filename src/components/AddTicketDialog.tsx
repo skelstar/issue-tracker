@@ -4,11 +4,12 @@ import type { Label } from '../types';
 interface Props {
   labels: Label[];
   onClose: () => void;
-  onSubmit: (title: string, labelId: string, newLabelName?: string) => Promise<void>;
+  onSubmit: (title: string, labelId: string, newLabelName?: string, description?: string) => Promise<void>;
 }
 
 export default function AddTicketDialog({ labels, onClose, onSubmit }: Props) {
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [labelChoice, setLabelChoice] = useState<string>(labels[0]?.id ?? '__new__');
   const [newLabelName, setNewLabelName] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -34,7 +35,7 @@ export default function AddTicketDialog({ labels, onClose, onSubmit }: Props) {
     if (isNew && !newLabelName.trim()) return;
     setSubmitting(true);
     try {
-      await onSubmit(title.trim(), labelChoice, isNew ? newLabelName.trim() : undefined);
+      await onSubmit(title.trim(), labelChoice, isNew ? newLabelName.trim() : undefined, description.trim() || undefined);
     } catch (err) {
       console.error('Failed to create ticket:', err);
       setSubmitting(false);
@@ -58,6 +59,16 @@ export default function AddTicketDialog({ labels, onClose, onSubmit }: Props) {
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="What needs to be done?"
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="description">Description <span className="form-label-optional">(optional)</span></label>
+            <textarea
+              id="description"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="Add more detail…"
+              rows={3}
             />
           </div>
           <div className="form-field">
