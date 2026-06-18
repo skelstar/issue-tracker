@@ -1,18 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Ticket, Label, Status } from '../types';
-import { STATUSES } from '../types';
+import type { Ticket, Label, Status, Priority } from '../types';
+import { STATUSES, PRIORITIES } from '../types';
+import PriorityIcon from './PriorityIcon';
 
 interface Props {
   ticket: Ticket;
   labels: Label[];
   onClose: () => void;
-  onSave: (id: string, updates: { title: string; description?: string; labelId: string; status: Status }) => Promise<void>;
+  onSave: (id: string, updates: { title: string; description?: string; labelId: string; status: Status; priority: Priority }) => Promise<void>;
   onDelete: (ticket: Ticket) => void;
 }
 
 export default function EditTicketDialog({ ticket, labels, onClose, onSave, onDelete }: Props) {
   const [title, setTitle] = useState(ticket.title);
   const [description, setDescription] = useState(ticket.description ?? '');
+  const [priority, setPriority] = useState<Priority>(ticket.priority ?? 3);
   const [labelId, setLabelId] = useState(ticket.labelId);
   const [status, setStatus] = useState<Status>(ticket.status);
   const [saving, setSaving] = useState(false);
@@ -36,7 +38,7 @@ export default function EditTicketDialog({ ticket, labels, onClose, onSave, onDe
     if (!title.trim()) return;
     setSaving(true);
     try {
-      await onSave(ticket.id, { title: title.trim(), description: description.trim() || undefined, labelId, status });
+      await onSave(ticket.id, { title: title.trim(), description: description.trim() || undefined, labelId, status, priority });
     } catch (err) {
       console.error('Failed to save ticket:', err);
       setSaving(false);
@@ -60,6 +62,22 @@ export default function EditTicketDialog({ ticket, labels, onClose, onSave, onDe
               value={title}
               onChange={e => setTitle(e.target.value)}
             />
+          </div>
+          <div className="form-field form-field--inline">
+            <label>Priority</label>
+            <div className="priority-picker">
+              {PRIORITIES.map(p => (
+                <button
+                  key={p.value}
+                  type="button"
+                  className={`priority-pick-btn${priority === p.value ? ' active' : ''}`}
+                  onClick={() => setPriority(p.value)}
+                  title={p.label}
+                >
+                  <PriorityIcon priority={p.value} size="md" />
+                </button>
+              ))}
+            </div>
           </div>
           <div className="form-field">
             <label htmlFor="edit-description">Description <span className="form-label-optional">(optional)</span></label>

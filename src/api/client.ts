@@ -35,7 +35,7 @@ export async function fetchTickets(): Promise<Ticket[]> {
   return r.json();
 }
 
-export async function createTicket(title: string, labelId: string, projectId: string, description?: string): Promise<Ticket> {
+export async function createTicket(title: string, labelId: string, projectId: string, description?: string, priority = 3): Promise<Ticket> {
   const r = await fetch(`${BASE}/tickets`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -44,6 +44,7 @@ export async function createTicket(title: string, labelId: string, projectId: st
       labelId,
       projectId,
       description,
+      priority,
       status: 'todo' as Status,
       createdAt: new Date().toISOString(),
     }),
@@ -53,7 +54,7 @@ export async function createTicket(title: string, labelId: string, projectId: st
 
 export async function updateTicket(
   id: string,
-  updates: Partial<Pick<Ticket, 'status' | 'labelId' | 'title' | 'description'>>
+  updates: Partial<Pick<Ticket, 'status' | 'labelId' | 'title' | 'description' | 'priority'>>
 ): Promise<Ticket> {
   const r = await fetch(`${BASE}/tickets/${id}`, {
     method: 'PUT',

@@ -23,12 +23,27 @@ export interface Project {
   name: string;
 }
 
+export type Priority = 1 | 2 | 3;
+
+export const PRIORITIES: { value: Priority; label: string }[] = [
+  { value: 1, label: 'High' },
+  { value: 2, label: 'Medium' },
+  { value: 3, label: 'Low' },
+];
+
+export const PRIORITY_COLORS: Record<Priority, string> = {
+  1: '#DC2626',
+  2: '#D97706',
+  3: '#94A3B8',
+};
+
 export interface Ticket {
   id: string;
   title: string;
   description?: string;
   labelId: string;
   status: Status;
+  priority: Priority;
   projectId: string;
   createdAt: string;
 }

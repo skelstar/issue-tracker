@@ -8,7 +8,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import type { Ticket, Label, Project, Status } from '../types';
+import type { Ticket, Label, Project, Status, Priority } from '../types';
 import EditTicketDialog from './EditTicketDialog';
 import { STATUSES, LABEL_COLORS } from '../types';
 import * as api from '../api/client';
@@ -89,7 +89,7 @@ export default function Board() {
     await api.updateTicket(ticket.id, updates);
   }
 
-  async function handleAddTicket(title: string, labelId: string, newLabelName?: string, description?: string) {
+  async function handleAddTicket(title: string, labelId: string, newLabelName?: string, description?: string, priority?: Priority) {
     if (!activeProjectId) return;
     let finalLabelId = labelId;
 
@@ -100,12 +100,12 @@ export default function Board() {
       finalLabelId = newLabel.id;
     }
 
-    const ticket = await api.createTicket(title, finalLabelId, activeProjectId, description);
+    const ticket = await api.createTicket(title, finalLabelId, activeProjectId, description, priority);
     setTickets(prev => [...prev, ticket]);
     setShowDialog(false);
   }
 
-  async function handleEditSave(id: string, updates: { title: string; description?: string; labelId: string; status: Status }) {
+  async function handleEditSave(id: string, updates: { title: string; description?: string; labelId: string; status: Status; priority: Priority }) {
     setTickets(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     setEditingTicket(null);
     await api.updateTicket(id, updates);

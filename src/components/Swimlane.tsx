@@ -13,9 +13,11 @@ interface CellProps {
 function DroppableCell({ id, tickets, allLabels, onEdit }: CellProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
+  const sorted = [...tickets].sort((a, b) => (a.priority ?? 4) - (b.priority ?? 4));
+
   return (
     <div ref={setNodeRef} className={`swimlane-cell${isOver ? ' drag-over' : ''}`}>
-      {tickets.map(ticket => (
+      {sorted.map(ticket => (
         <TicketCard
           key={ticket.id}
           ticket={ticket}

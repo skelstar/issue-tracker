@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Label } from '../types';
+import type { Label, Priority } from '../types';
+import { PRIORITIES } from '../types';
+import PriorityIcon from './PriorityIcon';
 
 interface Props {
   labels: Label[];
   onClose: () => void;
-  onSubmit: (title: string, labelId: string, newLabelName?: string, description?: string) => Promise<void>;
+  onSubmit: (title: string, labelId: string, newLabelName?: string, description?: string, priority?: Priority) => Promise<void>;
 }
 
 export default function AddTicketDialog({ labels, onClose, onSubmit }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState<Priority>(3);
   const [labelChoice, setLabelChoice] = useState<string>(labels[0]?.id ?? '__new__');
   const [newLabelName, setNewLabelName] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -35,7 +38,7 @@ export default function AddTicketDialog({ labels, onClose, onSubmit }: Props) {
     if (isNew && !newLabelName.trim()) return;
     setSubmitting(true);
     try {
-      await onSubmit(title.trim(), labelChoice, isNew ? newLabelName.trim() : undefined, description.trim() || undefined);
+      await onSubmit(title.trim(), labelChoice, isNew ? newLabelName.trim() : undefined, description.trim() || undefined, priority);
     } catch (err) {
       console.error('Failed to create ticket:', err);
       setSubmitting(false);
@@ -60,6 +63,22 @@ export default function AddTicketDialog({ labels, onClose, onSubmit }: Props) {
               onChange={e => setTitle(e.target.value)}
               placeholder="What needs to be done?"
             />
+          </div>
+          <div className="form-field form-field--inline">
+            <label>Priority</label>
+            <div className="priority-picker">
+              {PRIORITIES.map(p => (
+                <button
+                  key={p.value}
+                  type="button"
+                  className={`priority-pick-btn${priority === p.value ? ' active' : ''}`}
+                  onClick={() => setPriority(p.value)}
+                  title={p.label}
+                >
+                  <PriorityIcon priority={p.value} size="md" />
+                </button>
+              ))}
+            </div>
           </div>
           <div className="form-field">
             <label htmlFor="description">Description <span className="form-label-optional">(optional)</span></label>

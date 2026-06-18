@@ -299,6 +299,27 @@ body {
 }
 
 
+.ticket-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.priority-icon {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.priority-icon--md svg {
+  width: 11px;
+  height: 8px;
+}
+
 .ticket-title {
   font-size: 13px;
   font-weight: 500;
@@ -532,6 +553,51 @@ body {
 
 .btn-danger:hover {
   background: #B91C1C;
+}
+
+/* Priority picker */
+.form-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-field--inline label {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.priority-picker {
+  display: flex;
+  gap: 4px;
+}
+
+.priority-pick-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+
+.priority-pick-btn:hover {
+  border-color: #B3BAC5;
+  color: var(--text);
+}
+
+.priority-pick-btn.active {
+  border-color: var(--accent);
+  background: #EDEAF8;
+  color: var(--accent);
+  border-width: 2px;
 }
 
 .delete-confirm-body {

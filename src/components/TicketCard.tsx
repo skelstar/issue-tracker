@@ -1,6 +1,7 @@
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import type { Ticket, Label } from '../types';
+import PriorityIcon from './PriorityIcon';
 
 interface Props {
   ticket: Ticket;
@@ -27,7 +28,10 @@ export default function TicketCard({ ticket, label, isDragOverlay = false, onEdi
       {...listeners}
       {...attributes}
     >
-      <span className="ticket-title">{ticket.title}</span>
+      <div className="ticket-header">
+        <span className="ticket-title">{ticket.title}</span>
+        <PriorityIcon priority={ticket.priority} />
+      </div>
       {label && (
         <span className="ticket-badge" style={{ backgroundColor: label.color }}>
           {label.name}
