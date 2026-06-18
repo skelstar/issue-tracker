@@ -9,6 +9,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import type { Ticket, Label, Project, Status } from '../types';
+import EditTicketDialog from './EditTicketDialog';
 import { STATUSES, LABEL_COLORS } from '../types';
 import * as api from '../api/client';
 import Swimlane from './Swimlane';
@@ -22,7 +23,7 @@ export default function Board() {
   const [labels, setLabels] = useState<Label[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [ticketToDelete, setTicketToDelete] = useState<Ticket | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -51,7 +52,7 @@ export default function Board() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
-        setSelectedTicketId(null);
+        setEditingTicket(null);
         setAddingProject(false);
         setNewProjectName('');
       }
@@ -61,7 +62,7 @@ export default function Board() {
   }, []);
 
   function handleDragStart(event: DragStartEvent) {
-    setSelectedTicketId(null);
+    setEditingTicket(null);
     const ticket = tickets.find(t => t.id === event.active.id);
     setActiveTicket(ticket ?? null);
   }
@@ -104,11 +105,21 @@ export default function Board() {
     setShowDialog(false);
   }
 
+  async function handleEditSave(id: string, updates: { title: string; labelId: string; status: Status }) {
+    setTickets(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    setEditingTicket(null);
+    await api.updateTicket(id, updates);
+  }
+
+  function handleEditDelete(ticket: Ticket) {
+    setEditingTicket(null);
+    setTicketToDelete(ticket);
+  }
+
   async function handleDeleteConfirm() {
     if (!ticketToDelete) return;
     await api.deleteTicket(ticketToDelete.id);
     setTickets(prev => prev.filter(t => t.id !== ticketToDelete.id));
-    setSelectedTicketId(null);
     setTicketToDelete(null);
   }
 
@@ -130,14 +141,14 @@ export default function Board() {
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="board" onClick={() => setSelectedTicketId(null)}>
+      <div className="board">
 
         <div className="project-tabs" onClick={e => e.stopPropagation()}>
           {projects.map(p => (
             <button
               key={p.id}
               className={`project-tab${p.id === activeProjectId ? ' active' : ''}`}
-              onClick={() => { setActiveProjectId(p.id); setSelectedTicketId(null); }}
+              onClick={() => { setActiveProjectId(p.id); setEditingTicket(null); }}
             >
               {p.name}
             </button>
@@ -198,9 +209,7 @@ export default function Board() {
                       label={label}
                       tickets={projectTickets.filter(t => t.labelId === label.id)}
                       allLabels={labels}
-                      selectedTicketId={selectedTicketId}
-                      onSelectTicket={setSelectedTicketId}
-                      onDeleteRequest={setTicketToDelete}
+                      onEdit={setEditingTicket}
                     />
                   ))
               )}
@@ -231,6 +240,16 @@ export default function Board() {
           labels={labels}
           onClose={() => setShowDialog(false)}
           onSubmit={handleAddTicket}
+        />
+      )}
+
+      {editingTicket && (
+        <EditTicketDialog
+          ticket={editingTicket}
+          labels={labels}
+          onClose={() => setEditingTicket(null)}
+          onSave={handleEditSave}
+          onDelete={handleEditDelete}
         />
       )}
 

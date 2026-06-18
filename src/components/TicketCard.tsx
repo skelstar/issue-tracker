@@ -6,19 +6,10 @@ interface Props {
   ticket: Ticket;
   label: Label | undefined;
   isDragOverlay?: boolean;
-  isSelected?: boolean;
-  onSelect?: () => void;
-  onDeleteRequest?: () => void;
+  onEdit?: () => void;
 }
 
-export default function TicketCard({
-  ticket,
-  label,
-  isDragOverlay = false,
-  isSelected = false,
-  onSelect,
-  onDeleteRequest,
-}: Props) {
+export default function TicketCard({ ticket, label, isDragOverlay = false, onEdit }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: ticket.id,
   });
@@ -31,9 +22,8 @@ export default function TicketCard({
         'ticket-card',
         isDragging ? 'dragging' : '',
         isDragOverlay ? 'overlay' : '',
-        isSelected ? 'selected' : '',
       ].filter(Boolean).join(' ')}
-      onClick={e => { e.stopPropagation(); onSelect?.(); }}
+      onClick={e => { e.stopPropagation(); if (!isDragOverlay) onEdit?.(); }}
       {...listeners}
       {...attributes}
     >
@@ -42,15 +32,6 @@ export default function TicketCard({
         <span className="ticket-badge" style={{ backgroundColor: label.color }}>
           {label.name}
         </span>
-      )}
-      {isSelected && !isDragOverlay && (
-        <button
-          className="ticket-delete-btn"
-          onClick={e => { e.stopPropagation(); onDeleteRequest?.(); }}
-          aria-label="Delete ticket"
-        >
-          🗑
-        </button>
       )}
     </div>
   );

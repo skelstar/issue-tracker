@@ -7,12 +7,10 @@ interface CellProps {
   id: string;
   tickets: Ticket[];
   allLabels: Label[];
-  selectedTicketId: string | null;
-  onSelectTicket: (id: string | null) => void;
-  onDeleteRequest: (ticket: Ticket) => void;
+  onEdit: (ticket: Ticket) => void;
 }
 
-function DroppableCell({ id, tickets, allLabels, selectedTicketId, onSelectTicket, onDeleteRequest }: CellProps) {
+function DroppableCell({ id, tickets, allLabels, onEdit }: CellProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   return (
@@ -22,9 +20,7 @@ function DroppableCell({ id, tickets, allLabels, selectedTicketId, onSelectTicke
           key={ticket.id}
           ticket={ticket}
           label={allLabels.find(l => l.id === ticket.labelId)}
-          isSelected={ticket.id === selectedTicketId}
-          onSelect={() => onSelectTicket(ticket.id === selectedTicketId ? null : ticket.id)}
-          onDeleteRequest={() => onDeleteRequest(ticket)}
+          onEdit={() => onEdit(ticket)}
         />
       ))}
     </div>
@@ -35,12 +31,10 @@ interface Props {
   label: Label;
   tickets: Ticket[];
   allLabels: Label[];
-  selectedTicketId: string | null;
-  onSelectTicket: (id: string | null) => void;
-  onDeleteRequest: (ticket: Ticket) => void;
+  onEdit: (ticket: Ticket) => void;
 }
 
-export default function Swimlane({ label, tickets, allLabels, selectedTicketId, onSelectTicket, onDeleteRequest }: Props) {
+export default function Swimlane({ label, tickets, allLabels, onEdit }: Props) {
   return (
     <div className="swimlane">
       <div className="swimlane-header" style={{ borderLeftColor: label.color }}>
@@ -55,9 +49,7 @@ export default function Swimlane({ label, tickets, allLabels, selectedTicketId, 
             id={`${label.id}__${status.id}`}
             tickets={tickets.filter(t => t.status === (status.id as Status))}
             allLabels={allLabels}
-            selectedTicketId={selectedTicketId}
-            onSelectTicket={onSelectTicket}
-            onDeleteRequest={onDeleteRequest}
+            onEdit={onEdit}
           />
         ))}
       </div>

@@ -52,7 +52,7 @@ export async function createTicket(title: string, labelId: string, projectId: st
 
 export async function updateTicket(
   id: string,
-  updates: Partial<Pick<Ticket, 'status' | 'labelId'>>
+  updates: Partial<Pick<Ticket, 'status' | 'labelId' | 'title'>>
 ): Promise<Ticket> {
   const r = await fetch(`${BASE}/tickets/${id}`, {
     method: 'PUT',
