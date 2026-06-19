@@ -134,6 +134,7 @@ export default function Board() {
   }
 
   const projectTickets = tickets.filter(t => t.projectId === activeProjectId);
+  const projectLabels = labels.filter(l => projectTickets.some(t => t.labelId === l.id));
 
   if (loading) {
     return <div className="loading">Loading…</div>;
@@ -237,7 +238,7 @@ export default function Board() {
 
       {showDialog && (
         <AddTicketDialog
-          labels={labels}
+          labels={projectLabels}
           onClose={() => setShowDialog(false)}
           onSubmit={handleAddTicket}
         />
@@ -246,7 +247,7 @@ export default function Board() {
       {editingTicket && (
         <EditTicketDialog
           ticket={editingTicket}
-          labels={labels}
+          labels={projectLabels}
           onClose={() => setEditingTicket(null)}
           onSave={handleEditSave}
           onDelete={handleEditDelete}
