@@ -130,6 +130,21 @@ export default function Board() {
     setTicketToDelete(null);
   }
 
+  function handleExport() {
+    const data = tickets.map(t => ({
+      ...t,
+      labelName: labels.find(l => l.id === t.labelId)?.name,
+      projectName: projects.find(p => p.id === t.projectId)?.name,
+    }));
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tickets.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleCreateProject() {
     const name = newProjectName.trim();
     if (!name) { setAddingProject(false); return; }
@@ -182,6 +197,8 @@ export default function Board() {
               + New Project
             </button>
           )}
+
+          <button className="export-btn" onClick={handleExport}>Export JSON</button>
         </div>
 
         {activeProjectId === null ? (

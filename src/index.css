@@ -161,6 +161,25 @@ body {
   color: #B91C1C;
 }
 
+.export-btn {
+  margin-left: auto;
+  padding: 5px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+
+.export-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #EDEAF8;
+}
+
 /* Board */
 .board {
   background: var(--surface);
