@@ -105,6 +105,13 @@ export default function Board() {
     setShowDialog(false);
   }
 
+  async function handleCellDoubleClick(labelId: string, _status: Status) {
+    if (!activeProjectId) return;
+    const ticket = await api.createTicket('New ticket', labelId, activeProjectId, undefined, 3, 'todo');
+    setTickets(prev => [...prev, ticket]);
+    setEditingTicket(ticket);
+  }
+
   async function handleEditSave(id: string, updates: { title: string; description?: string; labelId: string; status: Status; priority: Priority }) {
     setTickets(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     setEditingTicket(null);
@@ -211,6 +218,7 @@ export default function Board() {
                       tickets={projectTickets.filter(t => t.labelId === label.id)}
                       allLabels={labels}
                       onEdit={setEditingTicket}
+                      onCellDoubleClick={handleCellDoubleClick}
                     />
                   ))
               )}

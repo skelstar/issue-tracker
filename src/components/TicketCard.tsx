@@ -25,6 +25,7 @@ export default function TicketCard({ ticket, label, isDragOverlay = false, onEdi
         isDragOverlay ? 'overlay' : '',
       ].filter(Boolean).join(' ')}
       onClick={e => { e.stopPropagation(); if (!isDragOverlay) onEdit?.(); }}
+      onDoubleClick={e => e.stopPropagation()}
       {...listeners}
       {...attributes}
     >

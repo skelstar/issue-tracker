@@ -8,15 +8,16 @@ interface CellProps {
   tickets: Ticket[];
   allLabels: Label[];
   onEdit: (ticket: Ticket) => void;
+  onDoubleClick: () => void;
 }
 
-function DroppableCell({ id, tickets, allLabels, onEdit }: CellProps) {
+function DroppableCell({ id, tickets, allLabels, onEdit, onDoubleClick }: CellProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   const sorted = [...tickets].sort((a, b) => (a.priority ?? 4) - (b.priority ?? 4));
 
   return (
-    <div ref={setNodeRef} className={`swimlane-cell${isOver ? ' drag-over' : ''}`}>
+    <div ref={setNodeRef} className={`swimlane-cell${isOver ? ' drag-over' : ''}`} onDoubleClick={onDoubleClick}>
       {sorted.map(ticket => (
         <TicketCard
           key={ticket.id}
@@ -34,15 +35,17 @@ interface Props {
   tickets: Ticket[];
   allLabels: Label[];
   onEdit: (ticket: Ticket) => void;
+  onCellDoubleClick: (labelId: string, status: Status) => void;
 }
 
-export default function Swimlane({ label, tickets, allLabels, onEdit }: Props) {
+export default function Swimlane({ label, tickets, allLabels, onEdit, onCellDoubleClick }: Props) {
   return (
     <div className="swimlane">
       <div className="swimlane-header" style={{ borderLeftColor: label.color }}>
         <span className="swimlane-dot" style={{ backgroundColor: label.color }} />
         <span className="swimlane-name">{label.name}</span>
         <span className="swimlane-count">{tickets.length}</span>
+        <button className="swimlane-add-btn" onClick={() => onCellDoubleClick(label.id, 'todo')}>+</button>
       </div>
       <div className="swimlane-row">
         {STATUSES.map(status => (
@@ -52,6 +55,7 @@ export default function Swimlane({ label, tickets, allLabels, onEdit }: Props) {
             tickets={tickets.filter(t => t.status === (status.id as Status))}
             allLabels={allLabels}
             onEdit={onEdit}
+            onDoubleClick={() => onCellDoubleClick(label.id, status.id as Status)}
           />
         ))}
       </div>

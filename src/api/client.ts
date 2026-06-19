@@ -35,7 +35,7 @@ export async function fetchTickets(): Promise<Ticket[]> {
   return r.json();
 }
 
-export async function createTicket(title: string, labelId: string, projectId: string, description?: string, priority = 3): Promise<Ticket> {
+export async function createTicket(title: string, labelId: string, projectId: string, description?: string, priority = 3, status: Status = 'todo'): Promise<Ticket> {
   const r = await fetch(`${BASE}/tickets`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -45,7 +45,7 @@ export async function createTicket(title: string, labelId: string, projectId: st
       projectId,
       description,
       priority,
-      status: 'todo' as Status,
+      status,
       createdAt: new Date().toISOString(),
     }),
   });

@@ -248,6 +248,28 @@ body {
   font-weight: 600;
 }
 
+.swimlane-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.swimlane-add-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #EDEAF8;
+}
+
 .swimlane-row {
   /* cells grid */
 }
