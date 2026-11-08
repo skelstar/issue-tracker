@@ -30,6 +30,24 @@ export async function createLabel(name: string, color: string): Promise<Label> {
   return r.json();
 }
 
+export async function updateLabel(id: string, updates: Partial<Pick<Label, 'name' | 'color' | 'collapsed'>>): Promise<Label> {
+  const r = await fetch(`${BASE}/labels/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return r.json();
+}
+
+export async function reorderLabels(ids: string[]): Promise<Label[]> {
+  const r = await fetch(`${BASE}/labels/order`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  return r.json();
+}
+
 export async function fetchTickets(): Promise<Ticket[]> {
   const r = await fetch(`${BASE}/tickets`);
   return r.json();

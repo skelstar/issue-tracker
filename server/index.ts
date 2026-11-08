@@ -52,6 +52,29 @@ app.post('/api/labels', (req, res) => {
   res.json(label);
 });
 
+// Reorder labels. Body: { ids: string[] } in the desired order; any labels
+// not listed keep their relative order at the end.
+app.put('/api/labels/order', (req, res) => {
+  const ids: unknown = req.body?.ids;
+  if (!Array.isArray(ids)) { res.status(400).json({ error: 'ids must be an array' }); return; }
+  const labels = read<Record<string, unknown>>(LABELS_FILE);
+  const byId = new Map(labels.map(l => [l.id, l]));
+  const ordered = ids.filter(id => byId.has(id)).map(id => byId.get(id)!);
+  const rest = labels.filter(l => !ids.includes(l.id));
+  const result = [...ordered, ...rest];
+  write(LABELS_FILE, result);
+  res.json(result);
+});
+
+app.put('/api/labels/:id', (req, res) => {
+  const labels = read<Record<string, unknown>>(LABELS_FILE);
+  const idx = labels.findIndex(l => l.id === req.params.id);
+  if (idx === -1) { res.status(404).json({ error: 'Not found' }); return; }
+  labels[idx] = { ...labels[idx], ...req.body, id: labels[idx].id };
+  write(LABELS_FILE, labels);
+  res.json(labels[idx]);
+});
+
 app.get('/api/tickets', (_req, res) => {
   res.json(read(TICKETS_FILE));
 });
