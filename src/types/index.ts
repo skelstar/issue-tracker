@@ -1,4 +1,4 @@
-export type Status = 'todo' | 'in-progress' | 'review' | 'done';
+export type Status = 'todo' | 'next' | 'in-progress' | 'review' | 'done';
 
 export interface StatusDef {
   id: Status;
@@ -7,6 +7,7 @@ export interface StatusDef {
 
 export const STATUSES: StatusDef[] = [
   { id: 'todo', label: 'Todo' },
+  { id: 'next', label: 'Next/Ready' },
   { id: 'in-progress', label: 'In Progress' },
   { id: 'review', label: 'Review' },
   { id: 'done', label: 'Done' },
@@ -16,6 +17,7 @@ export interface Label {
   id: string;
   name: string;
   color: string;
+  collapsed?: boolean;
 }
 
 export interface Project {

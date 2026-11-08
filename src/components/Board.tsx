@@ -7,12 +7,26 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  rectIntersection,
+  pointerWithin,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import type { Ticket, Label, Project, Status, Priority } from '../types';
 import EditTicketDialog from './EditTicketDialog';
 import { STATUSES, LABEL_COLORS } from '../types';
 import * as api from '../api/client';
-import Swimlane from './Swimlane';
+import Swimlane, { SwimlaneHeader, LANE_DRAG_PREFIX, LANE_DROP_PREFIX } from './Swimlane';
+
+// Lane drags may only land on lanes, ticket drags only on cells.
+const collisionDetection: CollisionDetection = args => {
+  const draggingLane = args.active.data.current?.type === 'lane';
+  const droppableContainers = args.droppableContainers.filter(
+    c => (c.data.current?.type === 'lane') === draggingLane
+  );
+  return draggingLane
+    ? pointerWithin({ ...args, droppableContainers })
+    : rectIntersection({ ...args, droppableContainers });
+};
 import TicketCard from './TicketCard';
 import AddTicketDialog from './AddTicketDialog';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
@@ -23,6 +37,7 @@ export default function Board() {
   const [labels, setLabels] = useState<Label[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+  const [activeLane, setActiveLane] = useState<Label | null>(null);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [ticketToDelete, setTicketToDelete] = useState<Ticket | null>(null);
   const [showDialog, setShowDialog] = useState(false);
@@ -63,14 +78,45 @@ export default function Board() {
 
   function handleDragStart(event: DragStartEvent) {
     setEditingTicket(null);
+    const id = String(event.active.id);
+    if (id.startsWith(LANE_DRAG_PREFIX)) {
+      setActiveLane(labels.find(l => l.id === id.slice(LANE_DRAG_PREFIX.length)) ?? null);
+      return;
+    }
     const ticket = tickets.find(t => t.id === event.active.id);
     setActiveTicket(ticket ?? null);
+  }
+
+  async function handleLaneDrop(activeId: string, overId: string) {
+    const fromId = activeId.slice(LANE_DRAG_PREFIX.length);
+    const toId = overId.slice(LANE_DROP_PREFIX.length);
+    if (fromId === toId) return;
+    const from = labels.findIndex(l => l.id === fromId);
+    const to = labels.findIndex(l => l.id === toId);
+    if (from === -1 || to === -1) return;
+    const next = [...labels];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setLabels(next);
+    await api.reorderLabels(next.map(l => l.id));
+  }
+
+  async function handleToggleCollapse(label: Label) {
+    const collapsed = !label.collapsed;
+    setLabels(prev => prev.map(l => (l.id === label.id ? { ...l, collapsed } : l)));
+    await api.updateLabel(label.id, { collapsed });
   }
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveTicket(null);
+    setActiveLane(null);
     if (!over) return;
+
+    if (String(active.id).startsWith(LANE_DRAG_PREFIX)) {
+      await handleLaneDrop(String(active.id), String(over.id));
+      return;
+    }
 
     const ticket = tickets.find(t => t.id === active.id);
     if (!ticket) return;
@@ -163,7 +209,13 @@ export default function Board() {
   }
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={collisionDetection}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => { setActiveTicket(null); setActiveLane(null); }}
+    >
       <div className="board">
 
         <div className="project-tabs" onClick={e => e.stopPropagation()}>
@@ -228,14 +280,16 @@ export default function Board() {
               ) : (
                 labels
                   .filter(l => projectTickets.some(t => t.labelId === l.id))
-                  .map(label => (
+                  .map((label, index) => (
                     <Swimlane
                       key={label.id}
                       label={label}
+                      index={index}
                       tickets={projectTickets.filter(t => t.labelId === label.id)}
                       allLabels={labels}
                       onEdit={setEditingTicket}
                       onCellDoubleClick={handleCellDoubleClick}
+                      onToggleCollapse={handleToggleCollapse}
                     />
                   ))
               )}
@@ -257,6 +311,14 @@ export default function Board() {
             ticket={activeTicket}
             label={labels.find(l => l.id === activeTicket.labelId)}
             isDragOverlay
+          />
+        )}
+        {activeLane && (
+          <SwimlaneHeader
+            label={activeLane}
+            count={projectTickets.filter(t => t.labelId === activeLane.id).length}
+            collapsed={!!activeLane.collapsed}
+            isOverlay
           />
         )}
       </DragOverlay>
