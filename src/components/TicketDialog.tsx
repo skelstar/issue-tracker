@@ -3,13 +3,14 @@ import type { Ticket, Tag, Status, Priority } from '../types';
 import { STATUSES, PRIORITIES } from '../types';
 import PriorityIcon from './PriorityIcon';
 import TagPicker, { isTagChoiceValid, tagChoiceFor, type TagChoice } from './TagPicker';
+import LabelPicker from './LabelPicker';
 
 export interface TicketDraft {
   title: string;
   description?: string;
   status: Status;
   priority: Priority;
-  label: TagChoice;
+  labelIds: string[];
   epic: TagChoice;
 }
 
@@ -20,16 +21,17 @@ interface Props {
   epics: Tag[];
   onClose: () => void;
   onSave: (draft: TicketDraft) => Promise<void>;
+  onCreateLabel: (name: string) => Promise<Tag>;
   onDelete?: (ticket: Ticket) => void;
 }
 
 /** Create or edit a ticket. */
-export default function TicketDialog({ ticket, labels, epics, onClose, onSave, onDelete }: Props) {
+export default function TicketDialog({ ticket, labels, epics, onClose, onSave, onCreateLabel, onDelete }: Props) {
   const [title, setTitle] = useState(ticket?.title ?? '');
   const [description, setDescription] = useState(ticket?.description ?? '');
   const [priority, setPriority] = useState<Priority>(ticket?.priority ?? 3);
   const [status, setStatus] = useState<Status>(ticket?.status ?? 'todo');
-  const [label, setLabel] = useState(tagChoiceFor(ticket?.labelId));
+  const [labelIds, setLabelIds] = useState<string[]>(ticket?.labelIds ?? []);
   const [epic, setEpic] = useState(tagChoiceFor(ticket?.epicId));
   const [saving, setSaving] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -47,14 +49,14 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const canSave = !saving && !!title.trim() && isTagChoiceValid(label, labels) && isTagChoiceValid(epic, epics);
+  const canSave = !saving && !!title.trim() && isTagChoiceValid(epic, epics);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSave) return;
     setSaving(true);
     try {
-      await onSave({ title: title.trim(), description: description.trim() || undefined, status, priority, label, epic });
+      await onSave({ title: title.trim(), description: description.trim() || undefined, status, priority, labelIds, epic });
     } catch (err) {
       console.error('Failed to save ticket:', err);
       setSaving(false);
@@ -107,7 +109,7 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
             />
           </div>
           <TagPicker kind="epic" id="ticket-epic" tags={epics} choice={epic} onChange={setEpic} />
-          <TagPicker kind="label" id="ticket-label" tags={labels} choice={label} onChange={setLabel} />
+          <LabelPicker labels={labels} selected={labelIds} onChange={setLabelIds} onCreate={onCreateLabel} />
           {ticket && (
             <div className="form-field">
               <label htmlFor="ticket-status">Status</label>

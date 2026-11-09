@@ -31,7 +31,7 @@ export default function ManageLabelsDialog({ labels, tickets, onClose, onAdd, on
         ) : (
           <ul className="tag-list">
             {labels.map(l => {
-              const count = tickets.filter(t => t.labelId === l.id).length;
+              const count = tickets.filter(t => t.labelIds?.includes(l.id)).length;
               return (
                 <li key={l.id}>
                   <button className="tag-list-row" onClick={() => onEdit(l)} title="Edit label">

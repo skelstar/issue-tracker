@@ -919,3 +919,73 @@ body {
 .tag-list-empty {
   color: var(--text-muted);
 }
+
+/* Multi-label picker in the ticket dialog */
+.label-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.label-chip {
+  padding: 3px 9px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.label-chip.on {
+  color: white;
+}
+
+.label-chip--add {
+  border-style: dashed;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.label-chip--add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.label-chip-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.form-field .label-chip-new input {
+  width: 130px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.label-chip-add,
+.label-chip-cancel {
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+}
+
+.label-chip-add {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.label-chip-add:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

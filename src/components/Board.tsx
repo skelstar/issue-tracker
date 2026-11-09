@@ -12,7 +12,7 @@ import {
   type CollisionDetection,
 } from '@dnd-kit/core';
 import type { Ticket, Tag, TagKind, Project, Status } from '../types';
-import { STATUSES, nextTagColor } from '../types';
+import { STATUSES, nextTagColor, retagTicket, ticketUsesTag } from '../types';
 import * as api from '../api/client';
 import Swimlane, { SwimlaneHeader, LANE_DRAG_PREFIX, LANE_DROP_PREFIX, type Section, type CellDropData } from './Swimlane';
 import TicketCard from './TicketCard';
@@ -44,7 +44,6 @@ function loadGroupBy(): GroupBy {
   }
 }
 
-const TICKET_FIELD: Record<TagKind, 'labelId' | 'epicId'> = { label: 'labelId', epic: 'epicId' };
 const NO_EPIC_ID = '__no-epic__';
 
 export default function Board() {
@@ -106,7 +105,8 @@ export default function Board() {
   const projectTickets = tickets.filter(t => t.projectId === activeProjectId);
   const projectLabels = labels.filter(l => l.projectId === activeProjectId);
   const projectEpics = epics.filter(e => e.projectId === activeProjectId);
-  const labelsById = new Map(labels.map(l => [l.id, l]));
+  // A ticket's labels, in the project's label order (ignoring any that no longer exist).
+  const labelsOf = (ticket: Ticket) => labels.filter(l => ticket.labelIds?.includes(l.id));
   const epicsById = new Map(projectEpics.map(e => [e.id, e]));
 
   const tagsOf = (kind: TagKind) => (kind === 'label' ? projectLabels : projectEpics);
@@ -208,7 +208,8 @@ export default function Board() {
       description: draft.description,
       status: draft.status,
       priority: draft.priority,
-      labelId: await resolveTagChoice('label', draft.label),
+      // Drop any label deleted while the dialog was open.
+      labelIds: draft.labelIds.filter(id => labels.some(l => l.id === id)),
       epicId: await resolveTagChoice('epic', draft.epic),
     };
     if (ticketDialog === 'new') {
@@ -228,7 +229,7 @@ export default function Board() {
       title: 'New ticket',
       status: 'todo',
       priority: 3,
-      labelId: null,
+      labelIds: [],
       epicId: section.epicId ?? null,
     });
     setTickets(prev => [...prev, ticket]);
@@ -250,9 +251,8 @@ export default function Board() {
   async function handleTagDelete(moveTo: string | null) {
     if (!tagDialog?.tag) return;
     const { kind, tag } = tagDialog;
-    const field = TICKET_FIELD[kind];
     await api.deleteTag(kind, tag.id, moveTo);
-    setTickets(prev => prev.map(t => (t[field] === tag.id ? { ...t, [field]: moveTo } : t)));
+    setTickets(prev => prev.map(t => retagTicket(t, kind, tag.id, moveTo)));
     setTagsOf(kind)(prev => prev.filter(t => t.id !== tag.id));
     setTagDialog(null);
   }
@@ -272,7 +272,7 @@ export default function Board() {
   function handleExport() {
     const data = tickets.map(t => ({
       ...t,
-      labelName: t.labelId ? labelsById.get(t.labelId)?.name : undefined,
+      labelNames: labelsOf(t).map(l => l.name),
       epicName: epics.find(e => e.id === t.epicId)?.name,
       projectName: projects.find(p => p.id === t.projectId)?.name,
     }));
@@ -300,7 +300,7 @@ export default function Board() {
       <TicketCard
         key={ticket.id}
         ticket={ticket}
-        label={ticket.labelId ? labelsById.get(ticket.labelId) : undefined}
+        labels={labelsOf(ticket)}
         epic={groupBy === 'none' && ticket.epicId ? epicsById.get(ticket.epicId) : undefined}
         onEdit={() => setTicketDialog(ticket)}
       />
@@ -312,7 +312,7 @@ export default function Board() {
   }
 
   const tagDialogCount = tagDialog?.tag
-    ? tickets.filter(t => t[TICKET_FIELD[tagDialog.kind]] === tagDialog.tag!.id).length
+    ? tickets.filter(t => ticketUsesTag(t, tagDialog.kind, tagDialog.tag!.id)).length
     : 0;
 
   return (
@@ -440,7 +440,7 @@ export default function Board() {
         {activeTicket && (
           <TicketCard
             ticket={activeTicket}
-            label={activeTicket.labelId ? labelsById.get(activeTicket.labelId) : undefined}
+            labels={labelsOf(activeTicket)}
             isDragOverlay
           />
         )}
@@ -461,6 +461,7 @@ export default function Board() {
           epics={projectEpics}
           onClose={() => setTicketDialog(null)}
           onSave={handleTicketSave}
+          onCreateLabel={name => createTag('label', name)}
           onDelete={handleEditDelete}
         />
       )}

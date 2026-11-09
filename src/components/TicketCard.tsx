@@ -5,14 +5,14 @@ import PriorityIcon from './PriorityIcon';
 
 interface Props {
   ticket: Ticket;
-  label: Tag | undefined;
+  labels: Tag[];
   /** Shown only in the ungrouped view, where the section doesn't already say it. */
   epic?: Tag;
   isDragOverlay?: boolean;
   onEdit?: () => void;
 }
 
-export default function TicketCard({ ticket, label, epic, isDragOverlay = false, onEdit }: Props) {
+export default function TicketCard({ ticket, labels, epic, isDragOverlay = false, onEdit }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: ticket.id,
   });
@@ -35,13 +35,13 @@ export default function TicketCard({ ticket, label, epic, isDragOverlay = false,
         <span className="ticket-title">{ticket.title}</span>
         <PriorityIcon priority={ticket.priority} />
       </div>
-      {(label || epic) && (
+      {(labels.length > 0 || epic) && (
         <div className="ticket-tags">
-          {label && (
-            <span className="ticket-badge" style={{ backgroundColor: label.color }}>
+          {labels.map(label => (
+            <span key={label.id} className="ticket-badge" style={{ backgroundColor: label.color }}>
               {label.name}
             </span>
-          )}
+          ))}
           {epic && (
             <span className="ticket-epic" style={{ borderLeftColor: epic.color }}>
               {epic.name}

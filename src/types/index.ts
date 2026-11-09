@@ -53,7 +53,7 @@ export interface Ticket {
   id: string;
   title: string;
   description?: string;
-  labelId?: string | null;
+  labelIds: string[];
   epicId?: string | null;
   status: Status;
   priority: Priority;
@@ -73,6 +73,19 @@ export const LABEL_COLORS = [
   '#065F46',
   '#9333EA',
 ];
+
+/** Whether the ticket has this label (kind 'label') or is in this epic. */
+export function ticketUsesTag(ticket: Ticket, kind: TagKind, id: string): boolean {
+  return kind === 'label' ? (ticket.labelIds ?? []).includes(id) : ticket.epicId === id;
+}
+
+/** The ticket with tag `id` replaced by `moveTo`, or removed when moveTo is null. Mirrors the server. */
+export function retagTicket(ticket: Ticket, kind: TagKind, id: string, moveTo: string | null): Ticket {
+  if (!ticketUsesTag(ticket, kind, id)) return ticket;
+  if (kind === 'epic') return { ...ticket, epicId: moveTo };
+  const labelIds = ticket.labelIds.map(x => (x === id ? moveTo : x)).filter((x): x is string => !!x);
+  return { ...ticket, labelIds: [...new Set(labelIds)] };
+}
 
 /** Colour for a new label/epic: the first palette colour the project's others aren't using. */
 export function nextTagColor(siblings: Tag[]): string {

@@ -64,7 +64,44 @@ function migrateLabelsToProjects(): void {
   console.log(`Migrated ${labels.length} shared labels to ${migrated.length} per-project labels (backup suffix ${stamp}.bak)`);
 }
 
+// Tickets used to have one label (labelId); now they have any number (labelIds).
+// Runs after migrateLabelsToProjects, which still reads labelId. Backs up tickets first.
+function migrateTicketsToLabelIds(): void {
+  const tickets = read<Row>(TICKETS_FILE);
+  if (tickets.every(t => Array.isArray(t.labelIds) && !('labelId' in t))) return;
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  fs.copyFileSync(TICKETS_FILE, `${TICKETS_FILE}.${stamp}.bak`);
+  for (const t of tickets) {
+    if (!Array.isArray(t.labelIds)) t.labelIds = t.labelId ? [t.labelId] : [];
+    delete t.labelId;
+  }
+  write(TICKETS_FILE, tickets);
+  console.log(`Migrated ${tickets.length} tickets from labelId to labelIds (backup suffix ${stamp}.bak)`);
+}
+
 migrateLabelsToProjects();
+migrateTicketsToLabelIds();
+
+/** How a ticket refers to labels (many) or epics (one). */
+interface TicketRef {
+  uses(ticket: Row, id: string): boolean;
+  /** Replace id with moveTo on the ticket, or just remove it when moveTo is null. */
+  replace(ticket: Row, id: string, moveTo: string | null): void;
+}
+
+const LABEL_REF: TicketRef = {
+  uses: (t, id) => Array.isArray(t.labelIds) && t.labelIds.includes(id),
+  replace: (t, id, moveTo) => {
+    const ids = (t.labelIds as string[]).map(x => (x === id ? moveTo : x)).filter((x): x is string => !!x);
+    t.labelIds = [...new Set(ids)];
+  },
+};
+
+const EPIC_REF: TicketRef = {
+  uses: (t, id) => t.epicId === id,
+  replace: (t, _id, moveTo) => { t.epicId = moveTo; },
+};
 
 app.get('/api/projects', (_req, res) => {
   res.json(read(PROJECTS_FILE));
@@ -78,9 +115,9 @@ app.post('/api/projects', (req, res) => {
   res.json(project);
 });
 
-// Labels and epics are both per-project "tags" on a ticket (ticket.labelId / ticket.epicId),
+// Labels and epics are both per-project "tags" on a ticket (ticket.labelIds / ticket.epicId),
 // stored in file order (the user's chosen order). Both are optional on a ticket.
-function registerTagRoutes(route: string, file: string, ticketField: 'labelId' | 'epicId'): void {
+function registerTagRoutes(route: string, file: string, ref: TicketRef): void {
   app.get(route, (_req, res) => {
     res.json(read(file));
   });
@@ -134,16 +171,16 @@ function registerTagRoutes(route: string, file: string, ticketField: 'labelId' |
     }
 
     const tickets = read<Row>(TICKETS_FILE);
-    const using = tickets.filter(t => t[ticketField] === tag.id);
-    for (const t of using) t[ticketField] = moveTo;
+    const using = tickets.filter(t => ref.uses(t, tag.id as string));
+    for (const t of using) ref.replace(t, tag.id as string, moveTo);
     if (using.length > 0) write(TICKETS_FILE, tickets);
     write(file, tags.filter(t => t.id !== tag.id));
     res.json({ ok: true, moved: using.length });
   });
 }
 
-registerTagRoutes('/api/labels', LABELS_FILE, 'labelId');
-registerTagRoutes('/api/epics', EPICS_FILE, 'epicId');
+registerTagRoutes('/api/labels', LABELS_FILE, LABEL_REF);
+registerTagRoutes('/api/epics', EPICS_FILE, EPIC_REF);
 
 app.get('/api/tickets', (_req, res) => {
   res.json(read(TICKETS_FILE));
