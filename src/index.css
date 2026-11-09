@@ -31,7 +31,7 @@ body {
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
 }
 
 .app-header {
@@ -186,7 +186,7 @@ body {
   background: var(--surface);
   border-radius: 6px;
   border: 1px solid var(--border);
-  overflow: hidden;
+  overflow: clip;
   min-width: 700px;
 }
 
@@ -200,6 +200,9 @@ body {
 .board-header {
   background: #F8F9FA;
   border-bottom: 2px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .col-status {
