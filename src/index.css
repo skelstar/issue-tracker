@@ -59,7 +59,9 @@ body {
 
 .app-main {
   flex: 1;
-  padding: 24px;
+  /* No top padding: sticky children stick inside the scroll container's
+     padding box, which would leave a gap above the board header. */
+  padding: 0 24px 24px;
   overflow: auto;
 }
 
@@ -188,6 +190,7 @@ body {
   border: 1px solid var(--border);
   overflow: clip;
   min-width: 700px;
+  margin-top: 24px;
 }
 
 .board-header,
