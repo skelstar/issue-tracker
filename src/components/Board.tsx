@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/core';
 import type { Ticket, Label, Project, Status, Priority } from '../types';
 import EditTicketDialog from './EditTicketDialog';
-import { STATUSES, LABEL_COLORS } from '../types';
+import { STATUSES, nextLabelColor } from '../types';
 import * as api from '../api/client';
 import Swimlane, { SwimlaneHeader, LANE_DRAG_PREFIX, LANE_DROP_PREFIX } from './Swimlane';
 
@@ -143,15 +143,19 @@ export default function Board() {
     let finalLabelId = labelId;
 
     if (labelId === '__new__' && newLabelName) {
-      const color = LABEL_COLORS[projectLabels.length % LABEL_COLORS.length];
-      const newLabel = await api.createLabel(newLabelName, color, activeProjectId);
-      setLabels(prev => [...prev, newLabel]);
-      finalLabelId = newLabel.id;
+      finalLabelId = (await createProjectLabel(newLabelName)).id;
     }
 
     const ticket = await api.createTicket(title, finalLabelId, activeProjectId, description, priority);
     setTickets(prev => [...prev, ticket]);
     setShowDialog(false);
+  }
+
+  async function createProjectLabel(name: string): Promise<Label> {
+    if (!activeProjectId) throw new Error('No active project');
+    const label = await api.createLabel(name, nextLabelColor(projectLabels), activeProjectId);
+    setLabels(prev => [...prev, label]);
+    return label;
   }
 
   async function handleLabelSave(name: string, color: string) {
@@ -183,7 +187,11 @@ export default function Board() {
     setEditingTicket(ticket);
   }
 
-  async function handleEditSave(id: string, updates: { title: string; description?: string; labelId: string; status: Status; priority: Priority }) {
+  async function handleEditSave(id: string, updates: { title: string; description?: string; labelId: string; status: Status; priority: Priority }, newLabelName?: string) {
+    if (updates.labelId === '__new__') {
+      if (!newLabelName) return;
+      updates = { ...updates, labelId: (await createProjectLabel(newLabelName)).id };
+    }
     setTickets(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     setEditingTicket(null);
     await api.updateTicket(id, updates);

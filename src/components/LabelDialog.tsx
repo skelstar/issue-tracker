@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Label } from '../types';
-import { LABEL_COLORS } from '../types';
+import { LABEL_COLORS, nextLabelColor } from '../types';
 
 interface Props {
   /** The label being edited; omit to create a new one. */
@@ -15,11 +15,8 @@ interface Props {
 }
 
 export default function LabelDialog({ label, projectLabels, ticketCount, onClose, onSave, onDelete }: Props) {
-  const usedColors = new Set(projectLabels.map(l => l.color));
   const [name, setName] = useState(label?.name ?? '');
-  const [color, setColor] = useState(
-    label?.color ?? LABEL_COLORS.find(c => !usedColors.has(c)) ?? LABEL_COLORS[projectLabels.length % LABEL_COLORS.length]
-  );
+  const [color, setColor] = useState(label?.color ?? nextLabelColor(projectLabels));
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const otherLabels = projectLabels.filter(l => l.id !== label?.id);
   const [moveTo, setMoveTo] = useState(otherLabels[0]?.id ?? '');
