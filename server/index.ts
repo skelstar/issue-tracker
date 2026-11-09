@@ -11,6 +11,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const TICKETS_FILE = path.join(DATA_DIR, 'tickets.json');
 const LABELS_FILE = path.join(DATA_DIR, 'labels.json');
 const PROJECTS_FILE = path.join(DATA_DIR, 'projects.json');
+const EPICS_FILE = path.join(DATA_DIR, 'epics.json');
 
 app.use(cors());
 app.use(express.json());
@@ -19,6 +20,7 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(TICKETS_FILE)) fs.writeFileSync(TICKETS_FILE, '[]');
 if (!fs.existsSync(LABELS_FILE)) fs.writeFileSync(LABELS_FILE, '[]');
 if (!fs.existsSync(PROJECTS_FILE)) fs.writeFileSync(PROJECTS_FILE, '[]');
+if (!fs.existsSync(EPICS_FILE)) fs.writeFileSync(EPICS_FILE, '[]');
 
 function read<T>(file: string): T[] {
   return JSON.parse(fs.readFileSync(file, 'utf-8'));
@@ -76,67 +78,72 @@ app.post('/api/projects', (req, res) => {
   res.json(project);
 });
 
-app.get('/api/labels', (_req, res) => {
-  res.json(read(LABELS_FILE));
-});
+// Labels and epics are both per-project "tags" on a ticket (ticket.labelId / ticket.epicId),
+// stored in file order (the user's chosen order). Both are optional on a ticket.
+function registerTagRoutes(route: string, file: string, ticketField: 'labelId' | 'epicId'): void {
+  app.get(route, (_req, res) => {
+    res.json(read(file));
+  });
 
-app.post('/api/labels', (req, res) => {
-  const { name, color, projectId } = req.body ?? {};
-  if (typeof name !== 'string' || !name.trim() || typeof projectId !== 'string') {
-    res.status(400).json({ error: 'name and projectId are required' }); return;
-  }
-  const labels = read<Record<string, unknown>>(LABELS_FILE);
-  const label = { id: uuidv4(), name: name.trim(), color, projectId };
-  labels.push(label);
-  write(LABELS_FILE, labels);
-  res.json(label);
-});
-
-// Reorder labels. Body: { ids: string[] } in the desired order; any labels
-// not listed keep their relative order at the end.
-app.put('/api/labels/order', (req, res) => {
-  const ids: unknown = req.body?.ids;
-  if (!Array.isArray(ids)) { res.status(400).json({ error: 'ids must be an array' }); return; }
-  const labels = read<Record<string, unknown>>(LABELS_FILE);
-  const byId = new Map(labels.map(l => [l.id, l]));
-  const ordered = ids.filter(id => byId.has(id)).map(id => byId.get(id)!);
-  const rest = labels.filter(l => !ids.includes(l.id));
-  const result = [...ordered, ...rest];
-  write(LABELS_FILE, result);
-  res.json(result);
-});
-
-app.put('/api/labels/:id', (req, res) => {
-  const labels = read<Record<string, unknown>>(LABELS_FILE);
-  const idx = labels.findIndex(l => l.id === req.params.id);
-  if (idx === -1) { res.status(404).json({ error: 'Not found' }); return; }
-  labels[idx] = { ...labels[idx], ...req.body, id: labels[idx].id };
-  write(LABELS_FILE, labels);
-  res.json(labels[idx]);
-});
-
-// Delete a label. If tickets still use it, ?moveTo=<labelId> (a label in the same
-// project) must say where they go; otherwise 409 with the ticket count.
-app.delete('/api/labels/:id', (req, res) => {
-  const labels = read<Row>(LABELS_FILE);
-  const label = labels.find(l => l.id === req.params.id);
-  if (!label) { res.status(404).json({ error: 'Not found' }); return; }
-
-  const tickets = read<Row>(TICKETS_FILE);
-  const using = tickets.filter(t => t.labelId === label.id);
-  if (using.length > 0) {
-    const moveTo = req.query.moveTo;
-    const target = labels.find(l => l.id === moveTo && l.id !== label.id && l.projectId === label.projectId);
-    if (!target) {
-      res.status(409).json({ error: 'Label has tickets; pass moveTo with another label in the same project', count: using.length });
-      return;
+  app.post(route, (req, res) => {
+    const { name, color, projectId } = req.body ?? {};
+    if (typeof name !== 'string' || !name.trim() || typeof projectId !== 'string') {
+      res.status(400).json({ error: 'name and projectId are required' }); return;
     }
-    for (const t of using) t.labelId = target.id;
-    write(TICKETS_FILE, tickets);
-  }
-  write(LABELS_FILE, labels.filter(l => l.id !== label.id));
-  res.json({ ok: true, moved: using.length });
-});
+    const tags = read<Row>(file);
+    const tag = { id: uuidv4(), name: name.trim(), color, projectId };
+    tags.push(tag);
+    write(file, tags);
+    res.json(tag);
+  });
+
+  // Reorder. Body: { ids: string[] } in the desired order; any not listed keep their
+  // relative order at the end.
+  app.put(`${route}/order`, (req, res) => {
+    const ids: unknown = req.body?.ids;
+    if (!Array.isArray(ids)) { res.status(400).json({ error: 'ids must be an array' }); return; }
+    const tags = read<Row>(file);
+    const byId = new Map(tags.map(t => [t.id, t]));
+    const ordered = ids.filter(id => byId.has(id)).map(id => byId.get(id)!);
+    const rest = tags.filter(t => !ids.includes(t.id));
+    const result = [...ordered, ...rest];
+    write(file, result);
+    res.json(result);
+  });
+
+  app.put(`${route}/:id`, (req, res) => {
+    const tags = read<Row>(file);
+    const idx = tags.findIndex(t => t.id === req.params.id);
+    if (idx === -1) { res.status(404).json({ error: 'Not found' }); return; }
+    tags[idx] = { ...tags[idx], ...req.body, id: tags[idx].id };
+    write(file, tags);
+    res.json(tags[idx]);
+  });
+
+  // Delete. Tickets using it move to ?moveTo=<id> (same project), or are left without one.
+  app.delete(`${route}/:id`, (req, res) => {
+    const tags = read<Row>(file);
+    const tag = tags.find(t => t.id === req.params.id);
+    if (!tag) { res.status(404).json({ error: 'Not found' }); return; }
+
+    let moveTo: string | null = null;
+    if (req.query.moveTo) {
+      const target = tags.find(t => t.id === req.query.moveTo && t.id !== tag.id && t.projectId === tag.projectId);
+      if (!target) { res.status(400).json({ error: 'moveTo must be another one in the same project' }); return; }
+      moveTo = target.id as string;
+    }
+
+    const tickets = read<Row>(TICKETS_FILE);
+    const using = tickets.filter(t => t[ticketField] === tag.id);
+    for (const t of using) t[ticketField] = moveTo;
+    if (using.length > 0) write(TICKETS_FILE, tickets);
+    write(file, tags.filter(t => t.id !== tag.id));
+    res.json({ ok: true, moved: using.length });
+  });
+}
+
+registerTagRoutes('/api/labels', LABELS_FILE, 'labelId');
+registerTagRoutes('/api/epics', EPICS_FILE, 'epicId');
 
 app.get('/api/tickets', (_req, res) => {
   res.json(read(TICKETS_FILE));

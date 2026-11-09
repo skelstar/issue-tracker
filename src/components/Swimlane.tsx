@@ -1,33 +1,46 @@
+import type { ReactNode } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import type { Ticket, Label, Status } from '../types';
+import type { Ticket, Status } from '../types';
 import { STATUSES } from '../types';
-import TicketCard from './TicketCard';
 
 export const LANE_DRAG_PREFIX = 'lane:';
 export const LANE_DROP_PREFIX = 'lane-drop:';
 
-interface CellProps {
+/** One horizontal band of the board. */
+export interface Section {
   id: string;
+  name: string;
+  color: string;
+  collapsed: boolean;
+  /**
+   * The epic a ticket gets when dropped or created here: an epic id, null for "No epic",
+   * or undefined in the ungrouped view (dropping keeps the ticket's epic).
+   */
+  epicId: string | null | undefined;
+  /** Real epics can be dragged to reorder and edited; "No epic" can't. */
+  isEpic: boolean;
+}
+
+/** Data on every cell droppable, read by the board's drag-end handler. */
+export interface CellDropData {
+  type: 'cell';
+  epicId: string | null | undefined;
+  status: Status;
+}
+
+interface CellProps {
+  section: Section;
   status: Status;
   tickets: Ticket[];
-  allLabels: Label[];
-  onEdit: (ticket: Ticket) => void;
+  renderCard: (ticket: Ticket) => ReactNode;
   onDoubleClick: () => void;
 }
 
-function DroppableCell({ id, status, tickets, allLabels, onEdit, onDoubleClick }: CellProps) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+function DroppableCell({ section, status, tickets, renderCard, onDoubleClick }: CellProps) {
+  const data: CellDropData = { type: 'cell', epicId: section.epicId, status };
+  const { setNodeRef, isOver } = useDroppable({ id: `cell:${section.id}:${status}`, data });
 
-  const sorted = [...tickets].sort((a, b) => (a.priority ?? 4) - (b.priority ?? 4));
-
-  const cards = sorted.map(ticket => (
-    <TicketCard
-      key={ticket.id}
-      ticket={ticket}
-      label={allLabels.find(l => l.id === ticket.labelId)}
-      onEdit={() => onEdit(ticket)}
-    />
-  ));
+  const cards = [...tickets].sort((a, b) => (a.priority ?? 4) - (b.priority ?? 4)).map(renderCard);
 
   return (
     <div ref={setNodeRef} className={`swimlane-cell swimlane-cell--${status}${isOver ? ' drag-over' : ''}`} onDoubleClick={onDoubleClick}>
@@ -37,68 +50,77 @@ function DroppableCell({ id, status, tickets, allLabels, onEdit, onDoubleClick }
 }
 
 interface HeaderProps {
-  label: Label;
+  section: Section;
   count: number;
-  collapsed: boolean;
   isOverlay?: boolean;
   onToggleCollapse?: () => void;
   onAdd?: () => void;
-  onEditLabel?: () => void;
+  onEdit?: () => void;
   dragHandle?: React.HTMLAttributes<HTMLButtonElement>;
   handleRef?: (el: HTMLElement | null) => void;
   headerRef?: (el: HTMLElement | null) => void;
 }
 
-export function SwimlaneHeader({ label, count, collapsed, isOverlay, onToggleCollapse, onAdd, onEditLabel, dragHandle, handleRef, headerRef }: HeaderProps) {
+export function SwimlaneHeader({ section, count, isOverlay, onToggleCollapse, onAdd, onEdit, dragHandle, handleRef, headerRef }: HeaderProps) {
   return (
-    <div ref={headerRef} className={`swimlane-header${isOverlay ? ' overlay' : ''}`} style={{ borderLeftColor: label.color }}>
+    <div ref={headerRef} className={`swimlane-header${isOverlay ? ' overlay' : ''}${section.isEpic ? '' : ' swimlane-header--none'}`} style={{ borderLeftColor: section.color }}>
+      {section.isEpic ? (
+        <button
+          ref={handleRef}
+          className="swimlane-grip"
+          title="Drag to reorder"
+          aria-label={`Reorder ${section.name}`}
+          {...dragHandle}
+        >
+          ⋮⋮
+        </button>
+      ) : (
+        <span className="swimlane-grip-spacer" />
+      )}
       <button
-        ref={handleRef}
-        className="swimlane-grip"
-        title="Drag to reorder"
-        aria-label={`Reorder ${label.name}`}
-        {...dragHandle}
-      >
-        ⋮⋮
-      </button>
-      <button
-        className={`swimlane-toggle${collapsed ? ' collapsed' : ''}`}
+        className={`swimlane-toggle${section.collapsed ? ' collapsed' : ''}`}
         onClick={onToggleCollapse}
-        aria-expanded={!collapsed}
-        title={collapsed ? 'Expand' : 'Collapse'}
+        aria-expanded={!section.collapsed}
+        title={section.collapsed ? 'Expand' : 'Collapse'}
       >
         <span className="swimlane-chevron">▾</span>
-        <span className="swimlane-dot" style={{ backgroundColor: label.color }} />
-        <span className="swimlane-name">{label.name}</span>
+        <span className="swimlane-dot" style={{ backgroundColor: section.color }} />
+        <span className="swimlane-name">{section.name}</span>
       </button>
       <span className="swimlane-count">{count}</span>
-      <button className="swimlane-add-btn" onClick={onAdd} title="Add ticket" aria-label={`Add ticket to ${label.name}`}>+</button>
-      <button className="swimlane-add-btn swimlane-edit-btn" onClick={onEditLabel} title="Edit label" aria-label={`Edit label ${label.name}`}>✎</button>
+      <button className="swimlane-add-btn" onClick={onAdd} title="Add ticket" aria-label={`Add ticket to ${section.name}`}>+</button>
+      {section.isEpic && (
+        <button className="swimlane-add-btn swimlane-edit-btn" onClick={onEdit} title="Edit epic" aria-label={`Edit epic ${section.name}`}>✎</button>
+      )}
     </div>
   );
 }
 
 interface Props {
-  label: Label;
+  section: Section;
   index: number;
   tickets: Ticket[];
-  allLabels: Label[];
-  onEdit: (ticket: Ticket) => void;
-  onCellDoubleClick: (labelId: string, status: Status) => void;
-  onToggleCollapse: (label: Label) => void;
-  onEditLabel: (label: Label) => void;
+  /** Ungrouped view: no header, just the cells. */
+  headerless?: boolean;
+  renderCard: (ticket: Ticket) => ReactNode;
+  onCellDoubleClick: (section: Section, status: Status) => void;
+  onToggleCollapse: (section: Section) => void;
+  onEdit: (section: Section) => void;
 }
 
-export default function Swimlane({ label, index, tickets, allLabels, onEdit, onCellDoubleClick, onToggleCollapse, onEditLabel }: Props) {
-  const collapsed = !!label.collapsed;
+export default function Swimlane({ section, index, tickets, headerless, renderCard, onCellDoubleClick, onToggleCollapse, onEdit }: Props) {
+  const reorderable = section.isEpic && !headerless;
+  const collapsed = section.collapsed && !headerless;
 
   const drag = useDraggable({
-    id: `${LANE_DRAG_PREFIX}${label.id}`,
+    id: `${LANE_DRAG_PREFIX}${section.id}`,
     data: { type: 'lane', index },
+    disabled: !reorderable,
   });
   const drop = useDroppable({
-    id: `${LANE_DROP_PREFIX}${label.id}`,
+    id: `${LANE_DROP_PREFIX}${section.id}`,
     data: { type: 'lane', index },
+    disabled: !reorderable,
   });
 
   // Show where the dragged lane will land: above this lane when moving up, below when moving down.
@@ -112,28 +134,28 @@ export default function Swimlane({ label, index, tickets, allLabels, onEdit, onC
       ref={drop.setNodeRef}
       className={`swimlane${collapsed ? ' collapsed' : ''}${drag.isDragging ? ' dragging' : ''}${dropClass}`}
     >
-      <SwimlaneHeader
-        label={label}
-        count={tickets.length}
-        collapsed={collapsed}
-        onToggleCollapse={() => onToggleCollapse(label)}
-        onAdd={() => onCellDoubleClick(label.id, 'todo')}
-        onEditLabel={() => onEditLabel(label)}
-        headerRef={drag.setNodeRef}
-        handleRef={drag.setActivatorNodeRef}
-        dragHandle={{ ...drag.listeners, ...drag.attributes }}
-      />
+      {!headerless && (
+        <SwimlaneHeader
+          section={section}
+          count={tickets.length}
+          onToggleCollapse={() => onToggleCollapse(section)}
+          onAdd={() => onCellDoubleClick(section, 'todo')}
+          onEdit={() => onEdit(section)}
+          headerRef={drag.setNodeRef}
+          handleRef={drag.setActivatorNodeRef}
+          dragHandle={{ ...drag.listeners, ...drag.attributes }}
+        />
+      )}
       {!collapsed && (
         <div className="swimlane-row">
           {STATUSES.map(status => (
             <DroppableCell
               key={status.id}
-              id={`${label.id}__${status.id}`}
-              status={status.id as Status}
-              tickets={tickets.filter(t => t.status === (status.id as Status))}
-              allLabels={allLabels}
-              onEdit={onEdit}
-              onDoubleClick={() => onCellDoubleClick(label.id, status.id as Status)}
+              section={section}
+              status={status.id}
+              tickets={tickets.filter(t => t.status === status.id)}
+              renderCard={renderCard}
+              onDoubleClick={() => onCellDoubleClick(section, status.id)}
             />
           ))}
         </div>

@@ -11,11 +11,16 @@ import {
   pointerWithin,
   type CollisionDetection,
 } from '@dnd-kit/core';
-import type { Ticket, Label, Project, Status, Priority } from '../types';
-import EditTicketDialog from './EditTicketDialog';
-import { STATUSES, nextLabelColor } from '../types';
+import type { Ticket, Tag, TagKind, Project, Status } from '../types';
+import { STATUSES, nextTagColor } from '../types';
 import * as api from '../api/client';
-import Swimlane, { SwimlaneHeader, LANE_DRAG_PREFIX, LANE_DROP_PREFIX } from './Swimlane';
+import Swimlane, { SwimlaneHeader, LANE_DRAG_PREFIX, LANE_DROP_PREFIX, type Section, type CellDropData } from './Swimlane';
+import TicketCard from './TicketCard';
+import TicketDialog, { type TicketDraft } from './TicketDialog';
+import TagDialog from './TagDialog';
+import ManageLabelsDialog from './ManageLabelsDialog';
+import DeleteConfirmDialog from './DeleteConfirmDialog';
+import { NEW_TAG, type TagChoice } from './TagPicker';
 
 // Lane drags may only land on lanes, ticket drags only on cells.
 const collisionDetection: CollisionDetection = args => {
@@ -27,23 +32,37 @@ const collisionDetection: CollisionDetection = args => {
     ? pointerWithin({ ...args, droppableContainers })
     : rectIntersection({ ...args, droppableContainers });
 };
-import TicketCard from './TicketCard';
-import AddTicketDialog from './AddTicketDialog';
-import DeleteConfirmDialog from './DeleteConfirmDialog';
-import LabelDialog from './LabelDialog';
+
+type GroupBy = 'epic' | 'none';
+const GROUP_BY_KEY = 'issue-tracker.groupBy';
+
+function loadGroupBy(): GroupBy {
+  try {
+    return localStorage.getItem(GROUP_BY_KEY) === 'none' ? 'none' : 'epic';
+  } catch {
+    return 'epic';
+  }
+}
+
+const TICKET_FIELD: Record<TagKind, 'labelId' | 'epicId'> = { label: 'labelId', epic: 'epicId' };
+const NO_EPIC_ID = '__no-epic__';
 
 export default function Board() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const [labels, setLabels] = useState<Label[]>([]);
+  const [labels, setLabels] = useState<Tag[]>([]);
+  const [epics, setEpics] = useState<Tag[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
-  const [activeLane, setActiveLane] = useState<Label | null>(null);
-  const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
+  const [activeLane, setActiveLane] = useState<Section | null>(null);
+  // 'new' = creating a ticket; a Ticket = editing that one.
+  const [ticketDialog, setTicketDialog] = useState<Ticket | 'new' | null>(null);
   const [ticketToDelete, setTicketToDelete] = useState<Ticket | null>(null);
-  const [showDialog, setShowDialog] = useState(false);
-  // 'new' = creating a label; a Label = editing that one.
-  const [labelDialog, setLabelDialog] = useState<Label | 'new' | null>(null);
+  // tag undefined = creating a new label/epic.
+  const [tagDialog, setTagDialog] = useState<{ kind: TagKind; tag?: Tag } | null>(null);
+  const [labelsOpen, setLabelsOpen] = useState(false);
+  const [groupBy, setGroupBy] = useState<GroupBy>(loadGroupBy);
+  const [noEpicCollapsed, setNoEpicCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [addingProject, setAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -54,10 +73,11 @@ export default function Board() {
   );
 
   useEffect(() => {
-    Promise.all([api.fetchProjects(), api.fetchLabels(), api.fetchTickets()]).then(([p, l, t]) => {
+    Promise.all([api.fetchProjects(), api.fetchTags('label'), api.fetchTags('epic'), api.fetchTickets()]).then(([p, l, e, t]) => {
       setProjects(p);
       setActiveProjectId(p[0]?.id ?? null);
       setLabels(l);
+      setEpics(e);
       setTickets(t);
       setLoading(false);
     });
@@ -70,7 +90,6 @@ export default function Board() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
-        setEditingTicket(null);
         setAddingProject(false);
         setNewProjectName('');
       }
@@ -79,35 +98,70 @@ export default function Board() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  function changeGroupBy(value: GroupBy) {
+    setGroupBy(value);
+    try { localStorage.setItem(GROUP_BY_KEY, value); } catch { /* storage unavailable: just don't remember */ }
+  }
+
+  const projectTickets = tickets.filter(t => t.projectId === activeProjectId);
+  const projectLabels = labels.filter(l => l.projectId === activeProjectId);
+  const projectEpics = epics.filter(e => e.projectId === activeProjectId);
+  const labelsById = new Map(labels.map(l => [l.id, l]));
+  const epicsById = new Map(projectEpics.map(e => [e.id, e]));
+
+  const tagsOf = (kind: TagKind) => (kind === 'label' ? projectLabels : projectEpics);
+  const setTagsOf = (kind: TagKind) => (kind === 'label' ? setLabels : setEpics);
+
+  // Sections: one per epic (in the user's order) plus "No epic" when it has tickets,
+  // or a single headerless section when ungrouped.
+  const ticketsWithoutEpic = projectTickets.filter(t => !t.epicId || !epicsById.has(t.epicId));
+  const sections: { section: Section; tickets: Ticket[] }[] = groupBy === 'none'
+    ? [{
+        section: { id: 'all', name: 'All tickets', color: 'transparent', collapsed: false, epicId: undefined, isEpic: false },
+        tickets: projectTickets,
+      }]
+    : [
+        ...projectEpics.map(e => ({
+          section: { id: e.id, name: e.name, color: e.color, collapsed: !!e.collapsed, epicId: e.id, isEpic: true },
+          tickets: projectTickets.filter(t => t.epicId === e.id),
+        })),
+        ...(ticketsWithoutEpic.length > 0
+          ? [{
+              section: { id: NO_EPIC_ID, name: 'No epic', color: 'var(--border)', collapsed: noEpicCollapsed, epicId: null, isEpic: false },
+              tickets: ticketsWithoutEpic,
+            }]
+          : []),
+      ];
+
   function handleDragStart(event: DragStartEvent) {
-    setEditingTicket(null);
     const id = String(event.active.id);
     if (id.startsWith(LANE_DRAG_PREFIX)) {
-      setActiveLane(labels.find(l => l.id === id.slice(LANE_DRAG_PREFIX.length)) ?? null);
+      const laneId = id.slice(LANE_DRAG_PREFIX.length);
+      setActiveLane(sections.find(s => s.section.id === laneId)?.section ?? null);
       return;
     }
-    const ticket = tickets.find(t => t.id === event.active.id);
-    setActiveTicket(ticket ?? null);
+    setActiveTicket(tickets.find(t => t.id === id) ?? null);
   }
 
   async function handleLaneDrop(activeId: string, overId: string) {
     const fromId = activeId.slice(LANE_DRAG_PREFIX.length);
     const toId = overId.slice(LANE_DROP_PREFIX.length);
     if (fromId === toId) return;
-    const from = labels.findIndex(l => l.id === fromId);
-    const to = labels.findIndex(l => l.id === toId);
+    const from = epics.findIndex(e => e.id === fromId);
+    const to = epics.findIndex(e => e.id === toId);
     if (from === -1 || to === -1) return;
-    const next = [...labels];
+    const next = [...epics];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
-    setLabels(next);
-    await api.reorderLabels(next.map(l => l.id));
+    setEpics(next);
+    await api.reorderTags('epic', next.map(e => e.id));
   }
 
-  async function handleToggleCollapse(label: Label) {
-    const collapsed = !label.collapsed;
-    setLabels(prev => prev.map(l => (l.id === label.id ? { ...l, collapsed } : l)));
-    await api.updateLabel(label.id, { collapsed });
+  async function handleToggleCollapse(section: Section) {
+    if (!section.isEpic) { setNoEpicCollapsed(c => !c); return; }
+    const collapsed = !section.collapsed;
+    setEpics(prev => prev.map(e => (e.id === section.id ? { ...e, collapsed } : e)));
+    await api.updateTag('epic', section.id, { collapsed });
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -122,83 +176,89 @@ export default function Board() {
     }
 
     const ticket = tickets.find(t => t.id === active.id);
-    if (!ticket) return;
+    const target = over.data.current as CellDropData | undefined;
+    if (!ticket || target?.type !== 'cell') return;
 
-    const [newLabelId, newStatus] = String(over.id).split('__');
-    if (newLabelId === ticket.labelId && newStatus === ticket.status) return;
+    const updates: Partial<api.TicketFields> = {};
+    if (target.status !== ticket.status) updates.status = target.status;
+    if (target.epicId !== undefined && target.epicId !== (ticket.epicId ?? null)) updates.epicId = target.epicId;
+    if (Object.keys(updates).length === 0) return;
 
-    const updates: Partial<Pick<Ticket, 'status' | 'labelId'>> = {};
-    if (newLabelId !== ticket.labelId) updates.labelId = newLabelId;
-    if (newStatus !== ticket.status) updates.status = newStatus as Status;
-
-    setTickets(prev =>
-      prev.map(t => (t.id === ticket.id ? { ...t, ...updates } : t))
-    );
-
+    setTickets(prev => prev.map(t => (t.id === ticket.id ? { ...t, ...updates } : t)));
     await api.updateTicket(ticket.id, updates);
   }
 
-  async function handleAddTicket(title: string, labelId: string, newLabelName?: string, description?: string, priority?: Priority) {
-    if (!activeProjectId) return;
-    let finalLabelId = labelId;
-
-    if (labelId === '__new__' && newLabelName) {
-      finalLabelId = (await createProjectLabel(newLabelName)).id;
-    }
-
-    const ticket = await api.createTicket(title, finalLabelId, activeProjectId, description, priority);
-    setTickets(prev => [...prev, ticket]);
-    setShowDialog(false);
-  }
-
-  async function createProjectLabel(name: string): Promise<Label> {
+  async function createTag(kind: TagKind, name: string, color = nextTagColor(tagsOf(kind))): Promise<Tag> {
     if (!activeProjectId) throw new Error('No active project');
-    const label = await api.createLabel(name, nextLabelColor(projectLabels), activeProjectId);
-    setLabels(prev => [...prev, label]);
-    return label;
+    const tag = await api.createTag(kind, name, color, activeProjectId);
+    setTagsOf(kind)(prev => [...prev, tag]);
+    return tag;
   }
 
-  async function handleLabelSave(name: string, color: string) {
-    if (labelDialog === 'new') {
-      if (!activeProjectId) return;
-      const label = await api.createLabel(name, color, activeProjectId);
-      setLabels(prev => [...prev, label]);
-    } else if (labelDialog) {
-      const id = labelDialog.id;
-      await api.updateLabel(id, { name, color });
-      setLabels(prev => prev.map(l => (l.id === id ? { ...l, name, color } : l)));
+  /** Turns a picker choice into a tag id, creating the tag if the user asked for a new one. */
+  async function resolveTagChoice(kind: TagKind, choice: TagChoice): Promise<string | null> {
+    if (choice.value === NEW_TAG) return (await createTag(kind, choice.newName.trim())).id;
+    return choice.value || null;
+  }
+
+  async function handleTicketSave(draft: TicketDraft) {
+    if (!activeProjectId || !ticketDialog) return;
+    const fields: api.TicketFields = {
+      title: draft.title,
+      description: draft.description,
+      status: draft.status,
+      priority: draft.priority,
+      labelId: await resolveTagChoice('label', draft.label),
+      epicId: await resolveTagChoice('epic', draft.epic),
+    };
+    if (ticketDialog === 'new') {
+      const ticket = await api.createTicket(activeProjectId, fields);
+      setTickets(prev => [...prev, ticket]);
+    } else {
+      const id = ticketDialog.id;
+      setTickets(prev => prev.map(t => (t.id === id ? { ...t, ...fields } : t)));
+      await api.updateTicket(id, fields);
     }
-    setLabelDialog(null);
+    setTicketDialog(null);
   }
 
-  async function handleLabelDelete(moveTo?: string) {
-    if (!labelDialog || labelDialog === 'new') return;
-    const id = labelDialog.id;
-    await api.deleteLabel(id, moveTo);
-    if (moveTo) setTickets(prev => prev.map(t => (t.labelId === id ? { ...t, labelId: moveTo } : t)));
-    setLabels(prev => prev.filter(l => l.id !== id));
-    setLabelDialog(null);
-  }
-
-  async function handleCellDoubleClick(labelId: string, _status: Status) {
+  async function handleCellDoubleClick(section: Section, _status: Status) {
     if (!activeProjectId) return;
-    const ticket = await api.createTicket('New ticket', labelId, activeProjectId, undefined, 3, 'todo');
+    const ticket = await api.createTicket(activeProjectId, {
+      title: 'New ticket',
+      status: 'todo',
+      priority: 3,
+      labelId: null,
+      epicId: section.epicId ?? null,
+    });
     setTickets(prev => [...prev, ticket]);
-    setEditingTicket(ticket);
+    setTicketDialog(ticket);
   }
 
-  async function handleEditSave(id: string, updates: { title: string; description?: string; labelId: string; status: Status; priority: Priority }, newLabelName?: string) {
-    if (updates.labelId === '__new__') {
-      if (!newLabelName) return;
-      updates = { ...updates, labelId: (await createProjectLabel(newLabelName)).id };
+  async function handleTagSave(name: string, color: string) {
+    if (!tagDialog) return;
+    const { kind, tag } = tagDialog;
+    if (!tag) {
+      await createTag(kind, name, color);
+    } else {
+      await api.updateTag(kind, tag.id, { name, color });
+      setTagsOf(kind)(prev => prev.map(t => (t.id === tag.id ? { ...t, name, color } : t)));
     }
-    setTickets(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
-    setEditingTicket(null);
-    await api.updateTicket(id, updates);
+    setTagDialog(null);
+  }
+
+  async function handleTagDelete(moveTo: string | null) {
+    if (!tagDialog?.tag) return;
+    const { kind, tag } = tagDialog;
+    const field = TICKET_FIELD[kind];
+    await api.deleteTag(kind, tag.id, moveTo);
+    setTickets(prev => prev.map(t => (t[field] === tag.id ? { ...t, [field]: moveTo } : t)));
+    setTagsOf(kind)(prev => prev.filter(t => t.id !== tag.id));
+    setTagDialog(null);
   }
 
   function handleEditDelete(ticket: Ticket) {
-    setEditingTicket(null);
+    setTicketDialog(null);
     setTicketToDelete(ticket);
   }
 
@@ -212,7 +272,8 @@ export default function Board() {
   function handleExport() {
     const data = tickets.map(t => ({
       ...t,
-      labelName: labels.find(l => l.id === t.labelId)?.name,
+      labelName: t.labelId ? labelsById.get(t.labelId)?.name : undefined,
+      epicName: epics.find(e => e.id === t.epicId)?.name,
       projectName: projects.find(p => p.id === t.projectId)?.name,
     }));
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -234,13 +295,25 @@ export default function Board() {
     setAddingProject(false);
   }
 
-  const projectTickets = tickets.filter(t => t.projectId === activeProjectId);
-  // A project's labels define its swimlanes, in the user's chosen order, even when empty.
-  const projectLabels = labels.filter(l => l.projectId === activeProjectId);
+  function renderCard(ticket: Ticket) {
+    return (
+      <TicketCard
+        key={ticket.id}
+        ticket={ticket}
+        label={ticket.labelId ? labelsById.get(ticket.labelId) : undefined}
+        epic={groupBy === 'none' && ticket.epicId ? epicsById.get(ticket.epicId) : undefined}
+        onEdit={() => setTicketDialog(ticket)}
+      />
+    );
+  }
 
   if (loading) {
     return <div className="loading">Loading…</div>;
   }
+
+  const tagDialogCount = tagDialog?.tag
+    ? tickets.filter(t => t[TICKET_FIELD[tagDialog.kind]] === tagDialog.tag!.id).length
+    : 0;
 
   return (
     <DndContext
@@ -257,7 +330,7 @@ export default function Board() {
             <button
               key={p.id}
               className={`project-tab${p.id === activeProjectId ? ' active' : ''}`}
-              onClick={() => { setActiveProjectId(p.id); setEditingTicket(null); }}
+              onClick={() => { setActiveProjectId(p.id); setTicketDialog(null); }}
             >
               {p.name}
             </button>
@@ -284,7 +357,27 @@ export default function Board() {
             </button>
           )}
 
-          <button className="export-btn" onClick={handleExport}>Export JSON</button>
+          <div className="board-toolbar">
+            {activeProjectId && (
+              <>
+                <div className="segmented" role="group" aria-label="Group by">
+                  <span className="segmented-label">Group by</span>
+                  {(['epic', 'none'] as const).map(value => (
+                    <button
+                      key={value}
+                      className={`segmented-btn${groupBy === value ? ' active' : ''}`}
+                      aria-pressed={groupBy === value}
+                      onClick={() => changeGroupBy(value)}
+                    >
+                      {value === 'epic' ? 'Epic' : 'None'}
+                    </button>
+                  ))}
+                </div>
+                <button className="export-btn" onClick={() => setLabelsOpen(true)}>Labels</button>
+              </>
+            )}
+            <button className="export-btn" onClick={handleExport}>Export JSON</button>
+          </div>
         </div>
 
         {activeProjectId === null ? (
@@ -306,35 +399,35 @@ export default function Board() {
             </div>
 
             <div className="board-body">
-              {projectLabels.length === 0 ? (
+              {sections.length === 0 ? (
                 <div className="empty-board">
-                  <p>No labels yet.</p>
-                  <p>Each label is a section on this board. Click <strong>+ Add Label</strong> to create one.</p>
+                  <p>No tickets yet.</p>
+                  <p>Click <strong>+ Add Ticket</strong> to create one, or <strong>+ Add Epic</strong> to add a section.</p>
                 </div>
               ) : (
-                projectLabels.map((label, index) => (
-                    <Swimlane
-                      key={label.id}
-                      label={label}
-                      index={index}
-                      tickets={projectTickets.filter(t => t.labelId === label.id)}
-                      allLabels={labels}
-                      onEdit={setEditingTicket}
-                      onCellDoubleClick={handleCellDoubleClick}
-                      onToggleCollapse={handleToggleCollapse}
-                      onEditLabel={setLabelDialog}
-                    />
-                  ))
+                sections.map(({ section, tickets: sectionTickets }, index) => (
+                  <Swimlane
+                    key={section.id}
+                    section={section}
+                    index={index}
+                    tickets={sectionTickets}
+                    headerless={groupBy === 'none'}
+                    renderCard={renderCard}
+                    onCellDoubleClick={handleCellDoubleClick}
+                    onToggleCollapse={handleToggleCollapse}
+                    onEdit={s => setTagDialog({ kind: 'epic', tag: epicsById.get(s.id) })}
+                  />
+                ))
               )}
               <div className="board-add-row">
                 <div className="col-add">
-                  <button className="add-ticket-btn" onClick={e => { e.stopPropagation(); setShowDialog(true); }}>
+                  <button className="add-ticket-btn" onClick={e => { e.stopPropagation(); setTicketDialog('new'); }}>
                     + Add Ticket
                   </button>
                 </div>
                 <div className="col-add">
-                  <button className="add-ticket-btn" onClick={e => { e.stopPropagation(); setLabelDialog('new'); }}>
-                    + Add Label
+                  <button className="add-ticket-btn" onClick={e => { e.stopPropagation(); setTagDialog({ kind: 'epic' }); }}>
+                    + Add Epic
                   </button>
                 </div>
               </div>
@@ -347,46 +440,50 @@ export default function Board() {
         {activeTicket && (
           <TicketCard
             ticket={activeTicket}
-            label={labels.find(l => l.id === activeTicket.labelId)}
+            label={activeTicket.labelId ? labelsById.get(activeTicket.labelId) : undefined}
             isDragOverlay
           />
         )}
         {activeLane && (
           <SwimlaneHeader
-            label={activeLane}
-            count={projectTickets.filter(t => t.labelId === activeLane.id).length}
-            collapsed={!!activeLane.collapsed}
+            section={activeLane}
+            count={sections.find(s => s.section.id === activeLane.id)?.tickets.length ?? 0}
             isOverlay
           />
         )}
       </DragOverlay>
 
-      {showDialog && (
-        <AddTicketDialog
+      {ticketDialog && (
+        <TicketDialog
+          key={ticketDialog === 'new' ? 'new' : ticketDialog.id}
+          ticket={ticketDialog === 'new' ? undefined : ticketDialog}
           labels={projectLabels}
-          onClose={() => setShowDialog(false)}
-          onSubmit={handleAddTicket}
-        />
-      )}
-
-      {editingTicket && (
-        <EditTicketDialog
-          ticket={editingTicket}
-          labels={projectLabels}
-          onClose={() => setEditingTicket(null)}
-          onSave={handleEditSave}
+          epics={projectEpics}
+          onClose={() => setTicketDialog(null)}
+          onSave={handleTicketSave}
           onDelete={handleEditDelete}
         />
       )}
 
-      {labelDialog && (
-        <LabelDialog
-          label={labelDialog === 'new' ? undefined : labelDialog}
-          projectLabels={projectLabels}
-          ticketCount={labelDialog === 'new' ? 0 : tickets.filter(t => t.labelId === labelDialog.id).length}
-          onClose={() => setLabelDialog(null)}
-          onSave={handleLabelSave}
-          onDelete={handleLabelDelete}
+      {labelsOpen && !tagDialog && (
+        <ManageLabelsDialog
+          labels={projectLabels}
+          tickets={projectTickets}
+          onClose={() => setLabelsOpen(false)}
+          onAdd={() => setTagDialog({ kind: 'label' })}
+          onEdit={label => setTagDialog({ kind: 'label', tag: label })}
+        />
+      )}
+
+      {tagDialog && (
+        <TagDialog
+          kind={tagDialog.kind}
+          tag={tagDialog.tag}
+          siblings={tagsOf(tagDialog.kind)}
+          ticketCount={tagDialogCount}
+          onClose={() => setTagDialog(null)}
+          onSave={handleTagSave}
+          onDelete={handleTagDelete}
         />
       )}
 

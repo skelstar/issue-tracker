@@ -1,16 +1,18 @@
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import type { Ticket, Label } from '../types';
+import type { Ticket, Tag } from '../types';
 import PriorityIcon from './PriorityIcon';
 
 interface Props {
   ticket: Ticket;
-  label: Label | undefined;
+  label: Tag | undefined;
+  /** Shown only in the ungrouped view, where the section doesn't already say it. */
+  epic?: Tag;
   isDragOverlay?: boolean;
   onEdit?: () => void;
 }
 
-export default function TicketCard({ ticket, label, isDragOverlay = false, onEdit }: Props) {
+export default function TicketCard({ ticket, label, epic, isDragOverlay = false, onEdit }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: ticket.id,
   });
@@ -33,10 +35,19 @@ export default function TicketCard({ ticket, label, isDragOverlay = false, onEdi
         <span className="ticket-title">{ticket.title}</span>
         <PriorityIcon priority={ticket.priority} />
       </div>
-      {label && (
-        <span className="ticket-badge" style={{ backgroundColor: label.color }}>
-          {label.name}
-        </span>
+      {(label || epic) && (
+        <div className="ticket-tags">
+          {label && (
+            <span className="ticket-badge" style={{ backgroundColor: label.color }}>
+              {label.name}
+            </span>
+          )}
+          {epic && (
+            <span className="ticket-epic" style={{ borderLeftColor: epic.color }}>
+              {epic.name}
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
