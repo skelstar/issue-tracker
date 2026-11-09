@@ -13,14 +13,22 @@ export const STATUSES: StatusDef[] = [
   { id: 'done', label: 'Done' },
 ];
 
-export interface Label {
+/** A per-project, coloured tag on a ticket. Labels and epics share this shape. */
+export interface Tag {
   id: string;
   name: string;
   color: string;
-  /** The project whose board shows this label as a swimlane. null = orphaned legacy label. */
+  /** The project this belongs to. null = orphaned legacy label. */
   projectId: string | null;
+  /** Epics only: whether the epic's board section is collapsed. */
   collapsed?: boolean;
 }
+
+export type Label = Tag;
+export type Epic = Tag;
+export type TagKind = 'label' | 'epic';
+
+export const TAG_NOUN: Record<TagKind, string> = { label: 'label', epic: 'epic' };
 
 export interface Project {
   id: string;
@@ -45,7 +53,8 @@ export interface Ticket {
   id: string;
   title: string;
   description?: string;
-  labelId: string;
+  labelIds: string[];
+  epicId?: string | null;
   status: Status;
   priority: Priority;
   projectId: string;
@@ -65,8 +74,21 @@ export const LABEL_COLORS = [
   '#9333EA',
 ];
 
-/** Colour for a new label: the first palette colour the project isn't using yet. */
-export function nextLabelColor(projectLabels: Label[]): string {
-  const used = new Set(projectLabels.map(l => l.color));
-  return LABEL_COLORS.find(c => !used.has(c)) ?? LABEL_COLORS[projectLabels.length % LABEL_COLORS.length];
+/** Whether the ticket has this label (kind 'label') or is in this epic. */
+export function ticketUsesTag(ticket: Ticket, kind: TagKind, id: string): boolean {
+  return kind === 'label' ? (ticket.labelIds ?? []).includes(id) : ticket.epicId === id;
+}
+
+/** The ticket with tag `id` replaced by `moveTo`, or removed when moveTo is null. Mirrors the server. */
+export function retagTicket(ticket: Ticket, kind: TagKind, id: string, moveTo: string | null): Ticket {
+  if (!ticketUsesTag(ticket, kind, id)) return ticket;
+  if (kind === 'epic') return { ...ticket, epicId: moveTo };
+  const labelIds = ticket.labelIds.map(x => (x === id ? moveTo : x)).filter((x): x is string => !!x);
+  return { ...ticket, labelIds: [...new Set(labelIds)] };
+}
+
+/** Colour for a new label/epic: the first palette colour the project's others aren't using. */
+export function nextTagColor(siblings: Tag[]): string {
+  const used = new Set(siblings.map(t => t.color));
+  return LABEL_COLORS.find(c => !used.has(c)) ?? LABEL_COLORS[siblings.length % LABEL_COLORS.length];
 }

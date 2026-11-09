@@ -1,95 +1,63 @@
-import type { Label, Project, Ticket, Status } from '../types';
+import type { Project, Tag, TagKind, Ticket } from '../types';
 
 const BASE = '/api';
 
-export async function fetchProjects(): Promise<Project[]> {
-  const r = await fetch(`${BASE}/projects`);
+async function json<T>(r: Response): Promise<T> {
+  if (!r.ok) throw new Error(`${r.url}: ${r.status}`);
   return r.json();
+}
+
+function send(method: string, body: unknown): RequestInit {
+  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
+
+export async function fetchProjects(): Promise<Project[]> {
+  return json(await fetch(`${BASE}/projects`));
 }
 
 export async function createProject(name: string): Promise<Project> {
-  const r = await fetch(`${BASE}/projects`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  });
-  return r.json();
+  return json(await fetch(`${BASE}/projects`, send('POST', { name })));
 }
 
-export async function fetchLabels(): Promise<Label[]> {
-  const r = await fetch(`${BASE}/labels`);
-  return r.json();
+// Labels and epics share one API shape.
+const TAG_ROUTE: Record<TagKind, string> = { label: `${BASE}/labels`, epic: `${BASE}/epics` };
+
+export async function fetchTags(kind: TagKind): Promise<Tag[]> {
+  return json(await fetch(TAG_ROUTE[kind]));
 }
 
-export async function createLabel(name: string, color: string, projectId: string): Promise<Label> {
-  const r = await fetch(`${BASE}/labels`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, color, projectId }),
-  });
-  if (!r.ok) throw new Error(`Create label failed: ${r.status}`);
-  return r.json();
+export async function createTag(kind: TagKind, name: string, color: string, projectId: string): Promise<Tag> {
+  return json(await fetch(TAG_ROUTE[kind], send('POST', { name, color, projectId })));
 }
 
-/** Deletes a label; moveTo is required when tickets still use it. */
-export async function deleteLabel(id: string, moveTo?: string): Promise<void> {
+export async function updateTag(kind: TagKind, id: string, updates: Partial<Pick<Tag, 'name' | 'color' | 'collapsed'>>): Promise<Tag> {
+  return json(await fetch(`${TAG_ROUTE[kind]}/${id}`, send('PUT', updates)));
+}
+
+export async function reorderTags(kind: TagKind, ids: string[]): Promise<Tag[]> {
+  return json(await fetch(`${TAG_ROUTE[kind]}/order`, send('PUT', { ids })));
+}
+
+/** Deletes a label/epic. Its tickets move to moveTo, or are left without one. */
+export async function deleteTag(kind: TagKind, id: string, moveTo?: string | null): Promise<void> {
   const query = moveTo ? `?moveTo=${encodeURIComponent(moveTo)}` : '';
-  const r = await fetch(`${BASE}/labels/${id}${query}`, { method: 'DELETE' });
-  if (!r.ok) throw new Error(`Delete label failed: ${r.status}`);
-}
-
-export async function updateLabel(id: string, updates: Partial<Pick<Label, 'name' | 'color' | 'collapsed'>>): Promise<Label> {
-  const r = await fetch(`${BASE}/labels/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
-  });
-  return r.json();
-}
-
-export async function reorderLabels(ids: string[]): Promise<Label[]> {
-  const r = await fetch(`${BASE}/labels/order`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids }),
-  });
-  return r.json();
+  await json(await fetch(`${TAG_ROUTE[kind]}/${id}${query}`, { method: 'DELETE' }));
 }
 
 export async function fetchTickets(): Promise<Ticket[]> {
-  const r = await fetch(`${BASE}/tickets`);
-  return r.json();
+  return json(await fetch(`${BASE}/tickets`));
 }
 
-export async function createTicket(title: string, labelId: string, projectId: string, description?: string, priority = 3, status: Status = 'todo'): Promise<Ticket> {
-  const r = await fetch(`${BASE}/tickets`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      title,
-      labelId,
-      projectId,
-      description,
-      priority,
-      status,
-      createdAt: new Date().toISOString(),
-    }),
-  });
-  return r.json();
+export type TicketFields = Pick<Ticket, 'title' | 'description' | 'status' | 'priority' | 'labelIds' | 'epicId'>;
+
+export async function createTicket(projectId: string, fields: TicketFields): Promise<Ticket> {
+  return json(await fetch(`${BASE}/tickets`, send('POST', { ...fields, projectId, createdAt: new Date().toISOString() })));
 }
 
-export async function updateTicket(
-  id: string,
-  updates: Partial<Pick<Ticket, 'status' | 'labelId' | 'title' | 'description' | 'priority'>>
-): Promise<Ticket> {
-  const r = await fetch(`${BASE}/tickets/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
-  });
-  return r.json();
+export async function updateTicket(id: string, updates: Partial<TicketFields>): Promise<Ticket> {
+  return json(await fetch(`${BASE}/tickets/${id}`, send('PUT', updates)));
 }
 
 export async function deleteTicket(id: string): Promise<void> {
-  await fetch(`${BASE}/tickets/${id}`, { method: 'DELETE' });
+  await json(await fetch(`${BASE}/tickets/${id}`, { method: 'DELETE' }));
 }

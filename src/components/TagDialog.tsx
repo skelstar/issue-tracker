@@ -1,25 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Label } from '../types';
-import { LABEL_COLORS, nextLabelColor } from '../types';
+import type { Tag, TagKind } from '../types';
+import { LABEL_COLORS, TAG_NOUN, nextTagColor } from '../types';
+import { isDuplicateName } from './TagPicker';
 
 interface Props {
-  /** The label being edited; omit to create a new one. */
-  label?: Label;
-  /** All labels in the current project (used for duplicate names and the move-to list). */
-  projectLabels: Label[];
-  /** Number of tickets using `label`. */
+  kind: TagKind;
+  /** The label/epic being edited; omit to create a new one. */
+  tag?: Tag;
+  /** All of this kind in the current project (for duplicate names and the move-to list). */
+  siblings: Tag[];
+  /** Number of tickets using `tag`. */
   ticketCount: number;
   onClose: () => void;
   onSave: (name: string, color: string) => Promise<void>;
-  onDelete: (moveTo?: string) => Promise<void>;
+  /** moveTo: where its tickets go; null leaves them without one. */
+  onDelete: (moveTo: string | null) => Promise<void>;
 }
 
-export default function LabelDialog({ label, projectLabels, ticketCount, onClose, onSave, onDelete }: Props) {
-  const [name, setName] = useState(label?.name ?? '');
-  const [color, setColor] = useState(label?.color ?? nextLabelColor(projectLabels));
+/** Create, rename/recolour, or delete a label or epic. */
+export default function TagDialog({ kind, tag, siblings, ticketCount, onClose, onSave, onDelete }: Props) {
+  const noun = TAG_NOUN[kind];
+  const [name, setName] = useState(tag?.name ?? '');
+  const [color, setColor] = useState(tag?.color ?? nextTagColor(siblings));
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const otherLabels = projectLabels.filter(l => l.id !== label?.id);
-  const [moveTo, setMoveTo] = useState(otherLabels[0]?.id ?? '');
+  const others = siblings.filter(t => t.id !== tag?.id);
+  const [moveTo, setMoveTo] = useState('');
   const [busy, setBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -34,8 +39,9 @@ export default function LabelDialog({ label, projectLabels, ticketCount, onClose
   }, [onClose]);
 
   const trimmed = name.trim();
-  const duplicate = otherLabels.some(l => l.name.trim().toLowerCase() === trimmed.toLowerCase());
+  const duplicate = isDuplicateName(trimmed, siblings, tag?.id);
   const canSave = !!trimmed && !duplicate && !busy;
+  const plural = ticketCount === 1 ? 'ticket' : 'tickets';
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -52,39 +58,30 @@ export default function LabelDialog({ label, projectLabels, ticketCount, onClose
     if (canSave) run(() => onSave(trimmed, color));
   }
 
-  if (label && confirmingDelete) {
-    const blocked = ticketCount > 0 && otherLabels.length === 0;
+  if (tag && confirmingDelete) {
     return (
       <div className="dialog-backdrop" onClick={onClose}>
         <div className="dialog" onClick={e => e.stopPropagation()}>
           <div className="dialog-header">
-            <h2>Delete label?</h2>
+            <h2>Delete {noun}?</h2>
             <button className="dialog-close" onClick={onClose} aria-label="Close">×</button>
           </div>
           <p className="delete-confirm-body">
-            The <strong>{label.name}</strong> section will be removed from this board.
+            <strong>{tag.name}</strong> will be deleted.
           </p>
-          {ticketCount > 0 && (blocked ? (
-            <p className="delete-confirm-body">
-              It still has {ticketCount} ticket{ticketCount === 1 ? '' : 's'} and there's no other label to move
-              them to. Add another label first, or delete the tickets.
-            </p>
-          ) : (
+          {ticketCount > 0 && (
             <div className="form-field">
-              <label htmlFor="moveTo">Move its {ticketCount} ticket{ticketCount === 1 ? '' : 's'} to</label>
+              <label htmlFor="moveTo">Its {ticketCount} {plural} will get</label>
               <select id="moveTo" value={moveTo} onChange={e => setMoveTo(e.target.value)}>
-                {otherLabels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                <option value="">No {noun}</option>
+                {others.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
-          ))}
+          )}
           <div className="dialog-actions">
             <button className="btn-secondary" onClick={() => setConfirmingDelete(false)}>Back</button>
-            <button
-              className="btn-danger"
-              disabled={blocked || busy}
-              onClick={() => run(() => onDelete(ticketCount > 0 ? moveTo : undefined))}
-            >
-              Delete label
+            <button className="btn-danger" disabled={busy} onClick={() => run(() => onDelete(moveTo || null))}>
+              Delete {noun}
             </button>
           </div>
         </div>
@@ -96,21 +93,20 @@ export default function LabelDialog({ label, projectLabels, ticketCount, onClose
     <div className="dialog-backdrop" onClick={onClose}>
       <div className="dialog" onClick={e => e.stopPropagation()}>
         <div className="dialog-header">
-          <h2>{label ? 'Edit label' : 'New label'}</h2>
+          <h2>{tag ? `Edit ${noun}` : `New ${noun}`}</h2>
           <button className="dialog-close" onClick={onClose} aria-label="Close">×</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="form-field">
-            <label htmlFor="labelName">Name</label>
+            <label htmlFor="tagName">Name</label>
             <input
-              id="labelName"
+              id="tagName"
               ref={nameRef}
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. Server, Client, Docs…"
             />
-            {duplicate && <span className="form-error">This project already has a label called that.</span>}
+            {duplicate && <span className="form-error">This project already has a {noun} called that.</span>}
           </div>
           <div className="form-field">
             <label>Colour</label>
@@ -129,14 +125,14 @@ export default function LabelDialog({ label, projectLabels, ticketCount, onClose
             </div>
           </div>
           <div className="dialog-actions">
-            {label && (
+            {tag && (
               <button type="button" className="btn-danger dialog-actions-left" onClick={() => setConfirmingDelete(true)}>
                 Delete
               </button>
             )}
             <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={!canSave}>
-              {label ? 'Save' : 'Add label'}
+              {tag ? 'Save' : `Add ${noun}`}
             </button>
           </div>
         </form>
