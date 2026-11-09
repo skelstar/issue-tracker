@@ -30,6 +30,7 @@ const collisionDetection: CollisionDetection = args => {
 import TicketCard from './TicketCard';
 import AddTicketDialog from './AddTicketDialog';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
+import LabelDialog from './LabelDialog';
 
 export default function Board() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -41,6 +42,8 @@ export default function Board() {
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [ticketToDelete, setTicketToDelete] = useState<Ticket | null>(null);
   const [showDialog, setShowDialog] = useState(false);
+  // 'new' = creating a label; a Label = editing that one.
+  const [labelDialog, setLabelDialog] = useState<Label | 'new' | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingProject, setAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -140,8 +143,8 @@ export default function Board() {
     let finalLabelId = labelId;
 
     if (labelId === '__new__' && newLabelName) {
-      const color = LABEL_COLORS[labels.length % LABEL_COLORS.length];
-      const newLabel = await api.createLabel(newLabelName, color);
+      const color = LABEL_COLORS[projectLabels.length % LABEL_COLORS.length];
+      const newLabel = await api.createLabel(newLabelName, color, activeProjectId);
       setLabels(prev => [...prev, newLabel]);
       finalLabelId = newLabel.id;
     }
@@ -149,6 +152,28 @@ export default function Board() {
     const ticket = await api.createTicket(title, finalLabelId, activeProjectId, description, priority);
     setTickets(prev => [...prev, ticket]);
     setShowDialog(false);
+  }
+
+  async function handleLabelSave(name: string, color: string) {
+    if (labelDialog === 'new') {
+      if (!activeProjectId) return;
+      const label = await api.createLabel(name, color, activeProjectId);
+      setLabels(prev => [...prev, label]);
+    } else if (labelDialog) {
+      const id = labelDialog.id;
+      await api.updateLabel(id, { name, color });
+      setLabels(prev => prev.map(l => (l.id === id ? { ...l, name, color } : l)));
+    }
+    setLabelDialog(null);
+  }
+
+  async function handleLabelDelete(moveTo?: string) {
+    if (!labelDialog || labelDialog === 'new') return;
+    const id = labelDialog.id;
+    await api.deleteLabel(id, moveTo);
+    if (moveTo) setTickets(prev => prev.map(t => (t.labelId === id ? { ...t, labelId: moveTo } : t)));
+    setLabels(prev => prev.filter(l => l.id !== id));
+    setLabelDialog(null);
   }
 
   async function handleCellDoubleClick(labelId: string, _status: Status) {
@@ -202,7 +227,8 @@ export default function Board() {
   }
 
   const projectTickets = tickets.filter(t => t.projectId === activeProjectId);
-  const projectLabels = labels.filter(l => projectTickets.some(t => t.labelId === l.id));
+  // A project's labels define its swimlanes, in the user's chosen order, even when empty.
+  const projectLabels = labels.filter(l => l.projectId === activeProjectId);
 
   if (loading) {
     return <div className="loading">Loading…</div>;
@@ -272,15 +298,13 @@ export default function Board() {
             </div>
 
             <div className="board-body">
-              {labels.filter(l => projectTickets.some(t => t.labelId === l.id)).length === 0 ? (
+              {projectLabels.length === 0 ? (
                 <div className="empty-board">
-                  <p>No tickets yet.</p>
-                  <p>Click <strong>+ Add Ticket</strong> to create your first one.</p>
+                  <p>No labels yet.</p>
+                  <p>Each label is a section on this board. Click <strong>+ Add Label</strong> to create one.</p>
                 </div>
               ) : (
-                labels
-                  .filter(l => projectTickets.some(t => t.labelId === l.id))
-                  .map((label, index) => (
+                projectLabels.map((label, index) => (
                     <Swimlane
                       key={label.id}
                       label={label}
@@ -290,6 +314,7 @@ export default function Board() {
                       onEdit={setEditingTicket}
                       onCellDoubleClick={handleCellDoubleClick}
                       onToggleCollapse={handleToggleCollapse}
+                      onEditLabel={setLabelDialog}
                     />
                   ))
               )}
@@ -297,6 +322,11 @@ export default function Board() {
                 <div className="col-add">
                   <button className="add-ticket-btn" onClick={e => { e.stopPropagation(); setShowDialog(true); }}>
                     + Add Ticket
+                  </button>
+                </div>
+                <div className="col-add">
+                  <button className="add-ticket-btn" onClick={e => { e.stopPropagation(); setLabelDialog('new'); }}>
+                    + Add Label
                   </button>
                 </div>
               </div>
@@ -338,6 +368,17 @@ export default function Board() {
           onClose={() => setEditingTicket(null)}
           onSave={handleEditSave}
           onDelete={handleEditDelete}
+        />
+      )}
+
+      {labelDialog && (
+        <LabelDialog
+          label={labelDialog === 'new' ? undefined : labelDialog}
+          projectLabels={projectLabels}
+          ticketCount={labelDialog === 'new' ? 0 : tickets.filter(t => t.labelId === labelDialog.id).length}
+          onClose={() => setLabelDialog(null)}
+          onSave={handleLabelSave}
+          onDelete={handleLabelDelete}
         />
       )}
 

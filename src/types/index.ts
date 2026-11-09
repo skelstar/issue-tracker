@@ -17,6 +17,8 @@ export interface Label {
   id: string;
   name: string;
   color: string;
+  /** The project whose board shows this label as a swimlane. null = orphaned legacy label. */
+  projectId: string | null;
   collapsed?: boolean;
 }
 

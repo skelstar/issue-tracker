@@ -28,6 +28,42 @@ function write<T>(file: string, data: T[]): void {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
+type Row = Record<string, unknown>;
+
+// Labels used to be shared by all projects; now each label belongs to one project
+// (projectId) and defines that project's swimlanes. Migrate old data once: a label used
+// by several projects is kept for the first and copied for the others, with those
+// projects' tickets repointed to their copy. A label no ticket uses gets projectId null
+// (it was never visible anyway). Backs up both files before changing them.
+function migrateLabelsToProjects(): void {
+  const labels = read<Row>(LABELS_FILE);
+  if (labels.every(l => 'projectId' in l)) return;
+  const tickets = read<Row>(TICKETS_FILE);
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  fs.copyFileSync(LABELS_FILE, `${LABELS_FILE}.${stamp}.bak`);
+  fs.copyFileSync(TICKETS_FILE, `${TICKETS_FILE}.${stamp}.bak`);
+
+  const migrated: Row[] = [];
+  for (const label of labels) {
+    if ('projectId' in label) { migrated.push(label); continue; }
+    const projectIds = [...new Set(tickets.filter(t => t.labelId === label.id).map(t => t.projectId))];
+    if (projectIds.length === 0) { migrated.push({ ...label, projectId: null }); continue; }
+    projectIds.forEach((projectId, i) => {
+      const id = i === 0 ? label.id : uuidv4();
+      migrated.push({ ...label, id, projectId });
+      if (i > 0) {
+        for (const t of tickets) if (t.labelId === label.id && t.projectId === projectId) t.labelId = id;
+      }
+    });
+  }
+  write(LABELS_FILE, migrated);
+  write(TICKETS_FILE, tickets);
+  console.log(`Migrated ${labels.length} shared labels to ${migrated.length} per-project labels (backup suffix ${stamp}.bak)`);
+}
+
+migrateLabelsToProjects();
+
 app.get('/api/projects', (_req, res) => {
   res.json(read(PROJECTS_FILE));
 });
@@ -45,8 +81,12 @@ app.get('/api/labels', (_req, res) => {
 });
 
 app.post('/api/labels', (req, res) => {
+  const { name, color, projectId } = req.body ?? {};
+  if (typeof name !== 'string' || !name.trim() || typeof projectId !== 'string') {
+    res.status(400).json({ error: 'name and projectId are required' }); return;
+  }
   const labels = read<Record<string, unknown>>(LABELS_FILE);
-  const label = { id: uuidv4(), ...req.body };
+  const label = { id: uuidv4(), name: name.trim(), color, projectId };
   labels.push(label);
   write(LABELS_FILE, labels);
   res.json(label);
@@ -73,6 +113,29 @@ app.put('/api/labels/:id', (req, res) => {
   labels[idx] = { ...labels[idx], ...req.body, id: labels[idx].id };
   write(LABELS_FILE, labels);
   res.json(labels[idx]);
+});
+
+// Delete a label. If tickets still use it, ?moveTo=<labelId> (a label in the same
+// project) must say where they go; otherwise 409 with the ticket count.
+app.delete('/api/labels/:id', (req, res) => {
+  const labels = read<Row>(LABELS_FILE);
+  const label = labels.find(l => l.id === req.params.id);
+  if (!label) { res.status(404).json({ error: 'Not found' }); return; }
+
+  const tickets = read<Row>(TICKETS_FILE);
+  const using = tickets.filter(t => t.labelId === label.id);
+  if (using.length > 0) {
+    const moveTo = req.query.moveTo;
+    const target = labels.find(l => l.id === moveTo && l.id !== label.id && l.projectId === label.projectId);
+    if (!target) {
+      res.status(409).json({ error: 'Label has tickets; pass moveTo with another label in the same project', count: using.length });
+      return;
+    }
+    for (const t of using) t.labelId = target.id;
+    write(TICKETS_FILE, tickets);
+  }
+  write(LABELS_FILE, labels.filter(l => l.id !== label.id));
+  res.json({ ok: true, moved: using.length });
 });
 
 app.get('/api/tickets', (_req, res) => {
