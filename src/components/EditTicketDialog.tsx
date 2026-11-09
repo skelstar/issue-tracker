@@ -7,7 +7,8 @@ interface Props {
   ticket: Ticket;
   labels: Label[];
   onClose: () => void;
-  onSave: (id: string, updates: { title: string; description?: string; labelId: string; status: Status; priority: Priority }) => Promise<void>;
+  /** labelId is '__new__' when the user chose to create a label; newLabelName then holds its name. */
+  onSave: (id: string, updates: { title: string; description?: string; labelId: string; status: Status; priority: Priority }, newLabelName?: string) => Promise<void>;
   onDelete: (ticket: Ticket) => void;
 }
 
@@ -16,6 +17,7 @@ export default function EditTicketDialog({ ticket, labels, onClose, onSave, onDe
   const [description, setDescription] = useState(ticket.description ?? '');
   const [priority, setPriority] = useState<Priority>(ticket.priority ?? 3);
   const [labelId, setLabelId] = useState(ticket.labelId);
+  const [newLabelName, setNewLabelName] = useState('');
   const [status, setStatus] = useState<Status>(ticket.status);
   const [saving, setSaving] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -33,12 +35,17 @@ export default function EditTicketDialog({ ticket, labels, onClose, onSave, onDe
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const isNew = labelId === '__new__';
+  const newName = newLabelName.trim();
+  const duplicateLabel = isNew && labels.some(l => l.name.trim().toLowerCase() === newName.toLowerCase());
+  const canSave = !saving && !!title.trim() && (!isNew || (!!newName && !duplicateLabel));
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!canSave) return;
     setSaving(true);
     try {
-      await onSave(ticket.id, { title: title.trim(), description: description.trim() || undefined, labelId, status, priority });
+      await onSave(ticket.id, { title: title.trim(), description: description.trim() || undefined, labelId, status, priority }, isNew ? newName : undefined);
     } catch (err) {
       console.error('Failed to save ticket:', err);
       setSaving(false);
@@ -99,8 +106,23 @@ export default function EditTicketDialog({ ticket, labels, onClose, onSave, onDe
               {labels.map(l => (
                 <option key={l.id} value={l.id}>{l.name}</option>
               ))}
+              <option value="__new__">+ Create new label…</option>
             </select>
           </div>
+          {isNew && (
+            <div className="form-field">
+              <label htmlFor="edit-new-label">New label name</label>
+              <input
+                id="edit-new-label"
+                type="text"
+                value={newLabelName}
+                onChange={e => setNewLabelName(e.target.value)}
+                placeholder="e.g. Server, Client, Docs…"
+                autoFocus
+              />
+              {duplicateLabel && <span className="form-error">This project already has a label called that.</span>}
+            </div>
+          )}
           <div className="form-field">
             <label htmlFor="edit-status">Status</label>
             <select
@@ -126,7 +148,7 @@ export default function EditTicketDialog({ ticket, labels, onClose, onSave, onDe
             <button
               type="submit"
               className="btn-primary"
-              disabled={saving || !title.trim()}
+              disabled={!canSave}
             >
               {saving ? 'Saving…' : 'Save'}
             </button>

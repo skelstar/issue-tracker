@@ -43,12 +43,13 @@ interface HeaderProps {
   isOverlay?: boolean;
   onToggleCollapse?: () => void;
   onAdd?: () => void;
+  onEditLabel?: () => void;
   dragHandle?: React.HTMLAttributes<HTMLButtonElement>;
   handleRef?: (el: HTMLElement | null) => void;
   headerRef?: (el: HTMLElement | null) => void;
 }
 
-export function SwimlaneHeader({ label, count, collapsed, isOverlay, onToggleCollapse, onAdd, dragHandle, handleRef, headerRef }: HeaderProps) {
+export function SwimlaneHeader({ label, count, collapsed, isOverlay, onToggleCollapse, onAdd, onEditLabel, dragHandle, handleRef, headerRef }: HeaderProps) {
   return (
     <div ref={headerRef} className={`swimlane-header${isOverlay ? ' overlay' : ''}`} style={{ borderLeftColor: label.color }}>
       <button
@@ -71,7 +72,8 @@ export function SwimlaneHeader({ label, count, collapsed, isOverlay, onToggleCol
         <span className="swimlane-name">{label.name}</span>
       </button>
       <span className="swimlane-count">{count}</span>
-      <button className="swimlane-add-btn" onClick={onAdd}>+</button>
+      <button className="swimlane-add-btn" onClick={onAdd} title="Add ticket" aria-label={`Add ticket to ${label.name}`}>+</button>
+      <button className="swimlane-add-btn swimlane-edit-btn" onClick={onEditLabel} title="Edit label" aria-label={`Edit label ${label.name}`}>✎</button>
     </div>
   );
 }
@@ -84,9 +86,10 @@ interface Props {
   onEdit: (ticket: Ticket) => void;
   onCellDoubleClick: (labelId: string, status: Status) => void;
   onToggleCollapse: (label: Label) => void;
+  onEditLabel: (label: Label) => void;
 }
 
-export default function Swimlane({ label, index, tickets, allLabels, onEdit, onCellDoubleClick, onToggleCollapse }: Props) {
+export default function Swimlane({ label, index, tickets, allLabels, onEdit, onCellDoubleClick, onToggleCollapse, onEditLabel }: Props) {
   const collapsed = !!label.collapsed;
 
   const drag = useDraggable({
@@ -115,6 +118,7 @@ export default function Swimlane({ label, index, tickets, allLabels, onEdit, onC
         collapsed={collapsed}
         onToggleCollapse={() => onToggleCollapse(label)}
         onAdd={() => onCellDoubleClick(label.id, 'todo')}
+        onEditLabel={() => onEditLabel(label)}
         headerRef={drag.setNodeRef}
         handleRef={drag.setActivatorNodeRef}
         dragHandle={{ ...drag.listeners, ...drag.attributes }}

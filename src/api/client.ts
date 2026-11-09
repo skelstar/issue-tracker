@@ -21,13 +21,21 @@ export async function fetchLabels(): Promise<Label[]> {
   return r.json();
 }
 
-export async function createLabel(name: string, color: string): Promise<Label> {
+export async function createLabel(name: string, color: string, projectId: string): Promise<Label> {
   const r = await fetch(`${BASE}/labels`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, color }),
+    body: JSON.stringify({ name, color, projectId }),
   });
+  if (!r.ok) throw new Error(`Create label failed: ${r.status}`);
   return r.json();
+}
+
+/** Deletes a label; moveTo is required when tickets still use it. */
+export async function deleteLabel(id: string, moveTo?: string): Promise<void> {
+  const query = moveTo ? `?moveTo=${encodeURIComponent(moveTo)}` : '';
+  const r = await fetch(`${BASE}/labels/${id}${query}`, { method: 'DELETE' });
+  if (!r.ok) throw new Error(`Delete label failed: ${r.status}`);
 }
 
 export async function updateLabel(id: string, updates: Partial<Pick<Label, 'name' | 'color' | 'collapsed'>>): Promise<Label> {

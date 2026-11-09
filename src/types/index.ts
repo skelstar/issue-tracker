@@ -17,6 +17,8 @@ export interface Label {
   id: string;
   name: string;
   color: string;
+  /** The project whose board shows this label as a swimlane. null = orphaned legacy label. */
+  projectId: string | null;
   collapsed?: boolean;
 }
 
@@ -62,3 +64,9 @@ export const LABEL_COLORS = [
   '#065F46',
   '#9333EA',
 ];
+
+/** Colour for a new label: the first palette colour the project isn't using yet. */
+export function nextLabelColor(projectLabels: Label[]): string {
+  const used = new Set(projectLabels.map(l => l.color));
+  return LABEL_COLORS.find(c => !used.has(c)) ?? LABEL_COLORS[projectLabels.length % LABEL_COLORS.length];
+}

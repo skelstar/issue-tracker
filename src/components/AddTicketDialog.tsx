@@ -31,11 +31,12 @@ export default function AddTicketDialog({ labels, onClose, onSubmit }: Props) {
   }, [onClose]);
 
   const isNew = labelChoice === '__new__';
+  const duplicateLabel = isNew && labels.some(l => l.name.trim().toLowerCase() === newLabelName.trim().toLowerCase());
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
-    if (isNew && !newLabelName.trim()) return;
+    if (isNew && (!newLabelName.trim() || duplicateLabel)) return;
     setSubmitting(true);
     try {
       await onSubmit(title.trim(), labelChoice, isNew ? newLabelName.trim() : undefined, description.trim() || undefined, priority);
@@ -113,6 +114,7 @@ export default function AddTicketDialog({ labels, onClose, onSubmit }: Props) {
                 onChange={e => setNewLabelName(e.target.value)}
                 placeholder="e.g. Bug, Feature, Chore…"
               />
+              {duplicateLabel && <span className="form-error">This project already has a label called that.</span>}
             </div>
           )}
           <div className="dialog-actions">
@@ -122,7 +124,7 @@ export default function AddTicketDialog({ labels, onClose, onSubmit }: Props) {
             <button
               type="submit"
               className="btn-primary"
-              disabled={submitting || !title.trim() || (isNew && !newLabelName.trim())}
+              disabled={submitting || !title.trim() || (isNew && (!newLabelName.trim() || duplicateLabel))}
             >
               {submitting ? 'Creating…' : 'Create'}
             </button>
