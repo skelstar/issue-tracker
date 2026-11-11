@@ -2,6 +2,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import type { Ticket, Tag } from '../types';
 import PriorityIcon from './PriorityIcon';
+import TicketTypeIcon from './TicketTypeIcon';
 
 interface Props {
   ticket: Ticket;
@@ -32,7 +33,10 @@ export default function TicketCard({ ticket, labels, epic, isDragOverlay = false
       {...attributes}
     >
       <div className="ticket-header">
-        <span className="ticket-title">{ticket.title}</span>
+        <span className="ticket-title">
+          {ticket.title}
+          <TicketTypeIcon type={ticket.type ?? 'task'} />
+        </span>
         <PriorityIcon priority={ticket.priority} />
       </div>
       {(labels.length > 0 || epic) && (

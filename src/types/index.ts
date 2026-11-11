@@ -49,6 +49,14 @@ export const PRIORITY_COLORS: Record<Priority, string> = {
   3: '#94A3B8',
 };
 
+export type TicketType = 'task' | 'spike' | 'bug';
+
+export const TICKET_TYPES: { value: TicketType; label: string }[] = [
+  { value: 'task', label: 'Task' },
+  { value: 'spike', label: 'Spike' },
+  { value: 'bug', label: 'Bug' },
+];
+
 export interface Ticket {
   id: string;
   title: string;
@@ -57,6 +65,8 @@ export interface Ticket {
   epicId?: string | null;
   status: Status;
   priority: Priority;
+  /** Missing on older tickets; treat as 'task'. */
+  type?: TicketType;
   projectId: string;
   createdAt: string;
 }

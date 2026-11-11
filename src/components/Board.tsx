@@ -208,6 +208,7 @@ export default function Board() {
       description: draft.description,
       status: draft.status,
       priority: draft.priority,
+      type: draft.type,
       // Drop any label deleted while the dialog was open.
       labelIds: draft.labelIds.filter(id => labels.some(l => l.id === id)),
       epicId: await resolveTagChoice('epic', draft.epic),
@@ -229,6 +230,7 @@ export default function Board() {
       title: 'New ticket',
       status: 'todo',
       priority: 3,
+      type: 'task',
       labelIds: [],
       epicId: section.epicId ?? null,
     });

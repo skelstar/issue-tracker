@@ -1,15 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Ticket, Tag, Status, Priority } from '../types';
+import type { Ticket, Tag, Status, Priority, TicketType } from '../types';
 import { STATUSES, PRIORITIES } from '../types';
 import PriorityIcon from './PriorityIcon';
+import TicketTypeSelect from './TicketTypeSelect';
 import TagPicker, { isTagChoiceValid, tagChoiceFor, type TagChoice } from './TagPicker';
 import LabelPicker from './LabelPicker';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export interface TicketDraft {
   title: string;
   description?: string;
   status: Status;
   priority: Priority;
+  type: TicketType;
   labelIds: string[];
   epic: TagChoice;
 }
@@ -30,10 +34,14 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
   const [title, setTitle] = useState(ticket?.title ?? '');
   const [description, setDescription] = useState(ticket?.description ?? '');
   const [priority, setPriority] = useState<Priority>(ticket?.priority ?? 3);
+  const [type, setType] = useState<TicketType>(ticket?.type ?? 'task');
   const [status, setStatus] = useState<Status>(ticket?.status ?? 'todo');
   const [labelIds, setLabelIds] = useState<string[]>(ticket?.labelIds ?? []);
   const [epic, setEpic] = useState(tagChoiceFor(ticket?.epicId));
   const [saving, setSaving] = useState(false);
+  // Existing tickets with a description open showing it rendered as Markdown;
+  // clicking it switches to the editor.
+  const [editingDescription, setEditingDescription] = useState(!ticket?.description?.trim());
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -56,7 +64,7 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
     if (!canSave) return;
     setSaving(true);
     try {
-      await onSave({ title: title.trim(), description: description.trim() || undefined, status, priority, labelIds, epic });
+      await onSave({ title: title.trim(), description: description.trim() || undefined, status, priority, type, labelIds, epic });
     } catch (err) {
       console.error('Failed to save ticket:', err);
       setSaving(false);
@@ -82,6 +90,7 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
               placeholder="What needs to be done?"
             />
           </div>
+          <div className="form-row">
           <div className="form-field form-field--inline">
             <label>Priority</label>
             <div className="priority-picker">
@@ -98,15 +107,55 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
               ))}
             </div>
           </div>
+          <div className="form-field form-field--inline">
+            <label>Type</label>
+            <TicketTypeSelect value={type} onChange={setType} />
+          </div>
+          </div>
           <div className="form-field">
             <label htmlFor="ticket-description">Description <span className="form-label-optional">(optional)</span></label>
-            <textarea
-              id="ticket-description"
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Add more detail…"
-              rows={ticket ? 4 : 3}
-            />
+            {editingDescription ? (
+              <textarea
+                id="ticket-description"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                onBlur={() => { if (ticket && description.trim()) setEditingDescription(false); }}
+                onKeyDown={e => {
+                  if (e.key === 'Escape' && ticket && description.trim()) {
+                    e.stopPropagation();
+                    setEditingDescription(false);
+                  }
+                }}
+                autoFocus={!!ticket?.description?.trim()}
+                placeholder="Add more detail… (Markdown supported)"
+                rows={ticket ? 6 : 3}
+              />
+            ) : (
+              <div
+                className="markdown-preview"
+                role="button"
+                tabIndex={0}
+                title="Click to edit"
+                onClick={e => {
+                  // Let links inside the description open normally.
+                  if ((e.target as HTMLElement).closest('a')) return;
+                  setEditingDescription(true);
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && e.target === e.currentTarget) {
+                    e.preventDefault();
+                    setEditingDescription(true);
+                  }
+                }}
+              >
+                <Markdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{ a: props => <a {...props} target="_blank" rel="noreferrer" /> }}
+                >
+                  {description}
+                </Markdown>
+              </div>
+            )}
           </div>
           <TagPicker kind="epic" id="ticket-epic" tags={epics} choice={epic} onChange={setEpic} />
           <LabelPicker labels={labels} selected={labelIds} onChange={setLabelIds} onCreate={onCreateLabel} />
