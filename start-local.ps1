@@ -1,6 +1,6 @@
 # Starts the issue tracker locally: API server (3001) + Vite client (3000).
 # Usage (from project root):  .\dev.ps1
-# If blocked by execution policy:  powershell -ExecutionPolicy Bypass -File dev.ps1
+# If blocked by execution policy:  powershell -ExecutionPolicy Bypass -File start-local.ps1
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 

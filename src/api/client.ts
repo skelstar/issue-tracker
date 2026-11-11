@@ -48,7 +48,7 @@ export async function fetchTickets(): Promise<Ticket[]> {
   return json(await fetch(`${BASE}/tickets`));
 }
 
-export type TicketFields = Pick<Ticket, 'title' | 'description' | 'status' | 'priority' | 'labelIds' | 'epicId'>;
+export type TicketFields = Pick<Ticket, 'title' | 'description' | 'status' | 'priority' | 'type' | 'labelIds' | 'epicId'>;
 
 export async function createTicket(projectId: string, fields: TicketFields): Promise<Ticket> {
   return json(await fetch(`${BASE}/tickets`, send('POST', { ...fields, projectId, createdAt: new Date().toISOString() })));
