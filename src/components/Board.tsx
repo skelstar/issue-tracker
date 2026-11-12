@@ -224,11 +224,11 @@ export default function Board() {
     setTicketDialog(null);
   }
 
-  async function handleCellDoubleClick(section: Section, _status: Status) {
+  async function handleCellDoubleClick(section: Section, status: Status) {
     if (!activeProjectId) return;
     const ticket = await api.createTicket(activeProjectId, {
       title: 'New ticket',
-      status: 'todo',
+      status,
       priority: 3,
       type: 'task',
       labelIds: [],
