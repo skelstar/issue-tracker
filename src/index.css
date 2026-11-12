@@ -709,7 +709,40 @@ body {
 .markdown-preview table { border-collapse: collapse; }
 .markdown-preview th,
 .markdown-preview td { border: 1px solid var(--border); padding: 4px 8px; }
-.markdown-preview img { max-width: 100%; height: auto; border-radius: var(--radius); }
+.markdown-preview img { max-width: 100%; height: auto; border-radius: var(--radius); cursor: zoom-in; }
+
+/* An image from a description, enlarged over the ticket dialog; click to close */
+.image-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(9, 30, 66, 0.85);
+  cursor: zoom-out;
+  animation: fade-in 0.1s ease;
+}
+.image-zoom img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-drag);
+  background: var(--surface);
+}
+.image-zoom-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  border: none;
+  background: none;
+  color: white;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+}
 
 .form-hint { margin-top: 4px; font-size: 12px; color: var(--text-muted); }
 .form-hint--error { color: #DC2626; }

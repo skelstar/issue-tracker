@@ -50,6 +50,8 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
   const [editingDescription, setEditingDescription] = useState(!ticket?.description?.trim());
   const [uploading, setUploading] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // Image from the description shown enlarged over the dialog.
+  const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
@@ -91,11 +93,14 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      // Escape closes an enlarged image first, then the dialog.
+      if (zoomedImage) setZoomedImage(null);
+      else onClose();
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, zoomedImage]);
 
   const canSave = !saving && uploading === 0 && !!title.trim() && isTagChoiceValid(epic, epics);
 
@@ -192,7 +197,12 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
                 title="Click to edit"
                 onClick={e => {
                   // Let links inside the description open normally.
-                  if ((e.target as HTMLElement).closest('a')) return;
+                  const target = e.target as HTMLElement;
+                  if (target.closest('a')) return;
+                  if (target instanceof HTMLImageElement) {
+                    setZoomedImage({ src: target.src, alt: target.alt });
+                    return;
+                  }
                   setEditingDescription(true);
                 }}
                 onKeyDown={e => {
@@ -236,6 +246,17 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
           </div>
         </form>
       </div>
+      {zoomedImage && (
+        <div
+          className="image-zoom"
+          role="dialog"
+          aria-label="Enlarged image"
+          onClick={e => { e.stopPropagation(); setZoomedImage(null); }}
+        >
+          <img src={zoomedImage.src} alt={zoomedImage.alt} />
+          <button className="image-zoom-close" aria-label="Close image">×</button>
+        </div>
+      )}
     </div>
   );
 }
