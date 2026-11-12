@@ -33,13 +33,10 @@ export default function TicketCard({ ticket, labels, epic, isDragOverlay = false
       {...attributes}
     >
       <div className="ticket-header">
-        <span className="ticket-title">
-          {ticket.title}
-          <TicketTypeIcon type={ticket.type ?? 'task'} />
-        </span>
+        <span className="ticket-title">{ticket.title}</span>
         <PriorityIcon priority={ticket.priority} />
       </div>
-      {(labels.length > 0 || epic) && (
+      <div className="ticket-footer">
         <div className="ticket-tags">
           {labels.map(label => (
             <span key={label.id} className="ticket-badge" style={{ backgroundColor: label.color }}>
@@ -52,7 +49,10 @@ export default function TicketCard({ ticket, labels, epic, isDragOverlay = false
             </span>
           )}
         </div>
-      )}
+        <div className="ticket-icons">
+          <TicketTypeIcon type={ticket.type ?? 'task'} />
+        </div>
+      </div>
     </div>
   );
 }
