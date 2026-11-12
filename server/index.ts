@@ -211,6 +211,35 @@ app.delete('/api/tickets/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// Images pasted into ticket descriptions. The client sends the raw image bytes; the
+// file is saved under a random name and referenced from the description's Markdown.
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const IMAGE_TYPES: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+};
+
+app.post('/api/uploads', express.raw({ type: Object.keys(IMAGE_TYPES), limit: '10mb' }), (req, res) => {
+  const ext = IMAGE_TYPES[req.headers['content-type'] ?? ''];
+  if (!ext || !Buffer.isBuffer(req.body) || req.body.length === 0) {
+    res.status(400).json({ error: 'Send a PNG, JPEG, GIF or WebP image' }); return;
+  }
+  const name = uuidv4() + ext;
+  fs.writeFileSync(path.join(UPLOADS_DIR, name), req.body);
+  res.json({ url: `/api/uploads/${name}` });
+});
+
+app.use('/api/uploads', express.static(UPLOADS_DIR, { immutable: true, maxAge: '1y' }));
+
+app.use((err: { type?: string }, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err.type === 'entity.too.large') { res.status(413).json({ error: 'Image is larger than 10 MB' }); return; }
+  next(err);
+});
+
 app.listen(PORT, () => {
   console.log(`API server running on http://localhost:${PORT}`);
 });

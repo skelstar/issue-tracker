@@ -7,6 +7,12 @@ import TagPicker, { isTagChoiceValid, tagChoiceFor, type TagChoice } from './Tag
 import LabelPicker from './LabelPicker';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { uploadImage } from '../api/client';
+
+/** The image files in a paste or drop, if any. */
+function imageFiles(data: DataTransfer): File[] {
+  return Array.from(data.files).filter(f => f.type.startsWith('image/'));
+}
 
 export interface TicketDraft {
   title: string;
@@ -42,7 +48,41 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
   // Existing tickets with a description open showing it rendered as Markdown;
   // clicking it switches to the editor.
   const [editingDescription, setEditingDescription] = useState(!ticket?.description?.trim());
+  const [uploading, setUploading] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * Insert pasted or dropped images into the description at the cursor. A placeholder
+   * is inserted straight away and replaced with the image's Markdown once uploaded.
+   */
+  function insertImages(files: File[]) {
+    const el = descriptionRef.current;
+    const start = el?.selectionStart ?? description.length;
+    const end = el?.selectionEnd ?? description.length;
+    const placeholders = files.map(() => `![Uploading image ${Math.random().toString(36).slice(2, 8)}…]()`);
+    const inserted = placeholders.join('\n');
+    setDescription(d => d.slice(0, start) + inserted + d.slice(end));
+    setUploadError(null);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + inserted.length, start + inserted.length);
+    });
+    files.forEach(async (file, i) => {
+      setUploading(n => n + 1);
+      try {
+        const url = await uploadImage(file);
+        setDescription(d => d.replace(placeholders[i], `![image](${url})`));
+      } catch (err) {
+        console.error('Image upload failed:', err);
+        setUploadError('Couldn’t upload image (PNG, JPEG, GIF or WebP up to 10 MB).');
+        setDescription(d => d.replace(placeholders[i], ''));
+      } finally {
+        setUploading(n => n - 1);
+      }
+    });
+  }
 
   useEffect(() => {
     titleRef.current?.focus();
@@ -57,7 +97,7 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const canSave = !saving && !!title.trim() && isTagChoiceValid(epic, epics);
+  const canSave = !saving && uploading === 0 && !!title.trim() && isTagChoiceValid(epic, epics);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -117,9 +157,23 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
             {editingDescription ? (
               <textarea
                 id="ticket-description"
+                ref={descriptionRef}
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                onBlur={() => { if (ticket && description.trim()) setEditingDescription(false); }}
+                onPaste={e => {
+                  const files = imageFiles(e.clipboardData);
+                  if (!files.length) return;
+                  e.preventDefault();
+                  insertImages(files);
+                }}
+                onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }}
+                onDrop={e => {
+                  const files = imageFiles(e.dataTransfer);
+                  if (!files.length) return;
+                  e.preventDefault();
+                  insertImages(files);
+                }}
+                onBlur={() => { if (ticket && description.trim() && uploading === 0) setEditingDescription(false); }}
                 onKeyDown={e => {
                   if (e.key === 'Escape' && ticket && description.trim()) {
                     e.stopPropagation();
@@ -127,7 +181,7 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
                   }
                 }}
                 autoFocus={!!ticket?.description?.trim()}
-                placeholder="Add more detail… (Markdown supported)"
+                placeholder="Add more detail… (Markdown supported; paste or drop images)"
                 rows={ticket ? 6 : 3}
               />
             ) : (
@@ -156,6 +210,8 @@ export default function TicketDialog({ ticket, labels, epics, onClose, onSave, o
                 </Markdown>
               </div>
             )}
+            {uploading > 0 && <div className="form-hint">Uploading image…</div>}
+            {uploadError && <div className="form-hint form-hint--error">{uploadError}</div>}
           </div>
           <TagPicker kind="epic" id="ticket-epic" tags={epics} choice={epic} onChange={setEpic} />
           <LabelPicker labels={labels} selected={labelIds} onChange={setLabelIds} onCreate={onCreateLabel} />
