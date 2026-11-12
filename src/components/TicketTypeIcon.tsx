@@ -10,7 +10,7 @@ interface Props {
   size?: 'sm' | 'md';
 }
 
-/** Spike: green question mark in a circle. Task: blue ticked checkbox. Bug: white bug on red. */
+/** Spike: green question mark in a circle. Task: blue outlined checkbox with tick. Bug: red outlined beetle. */
 export default function TicketTypeIcon({ type, size = 'sm' }: Props) {
   const px = size === 'md' ? 16 : 14;
   const label = TICKET_TYPES.find(t => t.value === type)?.label ?? '';
@@ -26,21 +26,17 @@ export default function TicketTypeIcon({ type, size = 'sm' }: Props) {
     >
       <title>{label}</title>
       {type === 'bug' ? (
-        <>
-          <rect x="0.5" y="0.5" width="15" height="15" rx="3" fill={BUG_RED} />
-          {/* legs and antennae */}
-          <path
-            d="M5.2 7.2 3.4 6.3M5 9.2H3.2M5.3 11.1l-1.8 1M10.8 7.2l1.8-.9M11 9.2h1.8M10.7 11.1l1.8 1M6.8 4.6 5.6 3.2M9.2 4.6l1.2-1.4"
-            fill="none"
-            stroke="#fff"
-            strokeWidth="1.1"
-            strokeLinecap="round"
-          />
-          {/* head and body */}
-          <circle cx="8" cy="5.4" r="1.6" fill="#fff" />
-          <ellipse cx="8" cy="9.3" rx="2.9" ry="3.3" fill="#fff" />
-          <path d="M8 6.6v5.9" stroke={BUG_RED} strokeWidth="0.9" />
-        </>
+        // Outlined beetle, after Flaticon's "bug" icon #7322297.
+        <g fill="none" stroke={BUG_RED} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+          {/* head and antennae */}
+          <path d="M5.5 5.5a2.5 2.5 0 0 1 5 0" />
+          <path d="M5.9 1.4 6.6 2.7M10.1 1.4 9.4 2.7" />
+          {/* body, split down the middle */}
+          <path d="M5.2 5.5h5.6c1.5 0 1.7 2.5 1.7 3.8 0 2.9-2 4.9-4.5 4.9s-4.5-2-4.5-4.9c0-1.3.2-3.8 1.7-3.8z" />
+          <path d="M8 5.5V14" />
+          {/* legs */}
+          <path d="M2.4 5.4 3.9 6.4M1.5 9.4h1.9M2.5 13.3 3.9 12M13.6 5.4 12.1 6.4M14.5 9.4h-1.9M13.5 13.3 12.1 12" />
+        </g>
       ) : type === 'spike' ? (
         <>
           <circle cx="8" cy="8" r="7.5" fill={SPIKE_GREEN} />
@@ -54,17 +50,11 @@ export default function TicketTypeIcon({ type, size = 'sm' }: Props) {
           <circle cx="8" cy="12.1" r="1" fill="#fff" />
         </>
       ) : (
-        <>
-          <rect x="0.5" y="0.5" width="15" height="15" rx="3" fill={TASK_BLUE} />
-          <polyline
-            points="4,8.3 6.8,11 12,5.2"
-            fill="none"
-            stroke="#fff"
-            strokeWidth="1.9"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </>
+        // Outlined checkbox, after Flaticon's "check-box" icon #9222555.
+        <g fill="none" stroke={TASK_BLUE} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="1.6" y="1.6" width="12.8" height="12.8" rx="1.6" />
+          <polyline points="4.5,8.5 6.5,10.5 11.5,5.5" />
+        </g>
       )}
     </svg>
   );

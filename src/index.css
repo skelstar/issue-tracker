@@ -458,6 +458,17 @@ body {
   margin-top: 1px;
 }
 
+/* The priority icon gets the card type icon's width so both share a vertical centre line. */
+.ticket-header .priority-icon {
+  width: 16px;
+}
+
+.ticket-icons .ticket-type-icon {
+  width: 16px;
+  height: 16px;
+  margin-left: 0;
+}
+
 .priority-icon--md svg {
   width: 11px;
   height: 8px;
@@ -1018,6 +1029,23 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+}
+
+/* Tags on the left, type icon pinned to the bottom-right corner. */
+.ticket-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ticket-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .ticket-epic {
