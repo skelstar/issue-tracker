@@ -58,6 +58,13 @@ export async function updateTicket(id: string, updates: Partial<TicketFields>): 
   return json(await fetch(`${BASE}/tickets/${id}`, send('PUT', updates)));
 }
 
+/** Upload an image and return the URL to reference it by. */
+export async function uploadImage(file: Blob): Promise<string> {
+  const r = await fetch(`${BASE}/uploads`, { method: 'POST', headers: { 'Content-Type': file.type }, body: file });
+  const { url } = await json<{ url: string }>(r);
+  return url;
+}
+
 export async function deleteTicket(id: string): Promise<void> {
   await json(await fetch(`${BASE}/tickets/${id}`, { method: 'DELETE' }));
 }
