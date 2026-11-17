@@ -62,6 +62,8 @@ export default function Board() {
   const [labelsOpen, setLabelsOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>(loadGroupBy);
   const [noEpicCollapsed, setNoEpicCollapsed] = useState(false);
+  // Label ids to filter on; a ticket shows if it has any of them. Empty = no filter.
+  const [labelFilter, setLabelFilter] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [addingProject, setAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -97,13 +99,22 @@ export default function Board() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  function toggleLabelFilter(id: string) {
+    setLabelFilter(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  }
+
   function changeGroupBy(value: GroupBy) {
     setGroupBy(value);
     try { localStorage.setItem(GROUP_BY_KEY, value); } catch { /* storage unavailable: just don't remember */ }
   }
 
-  const projectTickets = tickets.filter(t => t.projectId === activeProjectId);
   const projectLabels = labels.filter(l => l.projectId === activeProjectId);
+  // Ignore filter ids for labels that were deleted or belong to another project.
+  const activeFilter = labelFilter.filter(id => projectLabels.some(l => l.id === id));
+  const projectTickets = tickets.filter(t =>
+    t.projectId === activeProjectId &&
+    (activeFilter.length === 0 || activeFilter.some(id => t.labelIds?.includes(id)))
+  );
   const projectEpics = epics.filter(e => e.projectId === activeProjectId);
   // A ticket's labels, in the project's label order (ignoring any that no longer exist).
   const labelsOf = (ticket: Ticket) => labels.filter(l => ticket.labelIds?.includes(l.id));
@@ -304,7 +315,9 @@ export default function Board() {
         ticket={ticket}
         labels={labelsOf(ticket)}
         epic={groupBy === 'none' && ticket.epicId ? epicsById.get(ticket.epicId) : undefined}
+        activeLabelIds={activeFilter}
         onEdit={() => setTicketDialog(ticket)}
+        onLabelClick={label => toggleLabelFilter(label.id)}
       />
     );
   }
@@ -332,7 +345,7 @@ export default function Board() {
             <button
               key={p.id}
               className={`project-tab${p.id === activeProjectId ? ' active' : ''}`}
-              onClick={() => { setActiveProjectId(p.id); setTicketDialog(null); }}
+              onClick={() => { setActiveProjectId(p.id); setTicketDialog(null); setLabelFilter([]); }}
             >
               {p.name}
             </button>
@@ -389,6 +402,30 @@ export default function Board() {
           </div>
         ) : (
           <>
+            {projectLabels.length > 0 && (
+              <div className="label-filter" role="group" aria-label="Filter by label">
+                <span className="label-filter-title">Filter</span>
+                {projectLabels.map(label => {
+                  const active = activeFilter.includes(label.id);
+                  return (
+                    <button
+                      key={label.id}
+                      className={`label-filter-chip${active ? ' active' : ''}`}
+                      style={{ '--chip-color': label.color } as React.CSSProperties}
+                      aria-pressed={active}
+                      onClick={() => toggleLabelFilter(label.id)}
+                    >
+                      {label.name}
+                    </button>
+                  );
+                })}
+                {activeFilter.length > 0 && (
+                  <button className="label-filter-clear" onClick={() => setLabelFilter([])}>
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
             <div className="board-header">
               {STATUSES.map(s => (
                 <div key={s.id} className="col-status">
@@ -401,7 +438,11 @@ export default function Board() {
             </div>
 
             <div className="board-body">
-              {sections.length === 0 ? (
+              {activeFilter.length > 0 && projectTickets.length === 0 ? (
+                <div className="empty-board">
+                  <p>No tickets match the selected labels.</p>
+                </div>
+              ) : sections.length === 0 ? (
                 <div className="empty-board">
                   <p>No tickets yet.</p>
                   <p>Click <strong>+ Add Ticket</strong> to create one, or <strong>+ Add Epic</strong> to add a section.</p>
